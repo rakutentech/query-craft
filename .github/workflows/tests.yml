@@ -6,12 +6,12 @@ on:
     branches:
       - '**'
 
-name: "Tests"
+name: "Tests & Lint"
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 jobs:
-  coveritup:
+  test:
     strategy:
       matrix:
         os: [ubuntu-latest]
