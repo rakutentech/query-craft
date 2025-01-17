@@ -1,0 +1,31 @@
+on:
+  pull_request:
+  push:
+    tags-ignore:
+      - '**'
+    branches:
+      - '**'
+
+name: "Tests & Lint"
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+jobs:
+  test:
+    strategy:
+      matrix:
+        os: [ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node.js ${{ matrix.node-versions }}
+        uses: actions/setup-node@v2
+        with:
+          node-version: 20
+
+      - run: npm install
+      - run: |
+          echo "AZURE_OPENAI_ENDPOINT=test" >> .env
+          echo "AZURE_OPENAI_API_KEY=test" >> .env
+      - run: npm run build
+

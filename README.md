@@ -39,7 +39,6 @@ Before you begin, ensure you have met the following requirements:
 
    ```
     npm install
-    
    ```
 
 3. Set up your environment variables:
@@ -60,11 +59,11 @@ Before you begin, ensure you have met the following requirements:
    ```
    OR use Docker
    ```
-   docker build -t querycraft .   
-   ``` 
+   docker build -t querycraft .
    ```
-   docker run -p 3000:3000 querycraft    
-   ``` 
+   ```
+   docker run -p 3000:3000 querycraft
+   ```
 
 2. Open your browser and navigate to `http://localhost:3000`.
 
