@@ -36,6 +36,7 @@ import {
   Database
 } from "lucide-react";
 import { format, parseISO, addHours } from "date-fns";
+const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 
 interface QueryResult {
   [key: string]: any;
@@ -69,14 +70,9 @@ interface Conversation {
   timestamp: string;
 }
 
-interface DatabaseQueryAppProps {
-  initialConversations: Conversation[];
-}
 
-export default function DatabaseQueryApp({
-  initialConversations
-}: DatabaseQueryAppProps) {
-  const [conversations, setConversations] = useState<Conversation[]>(initialConversations);
+export default function DatabaseQueryApp() {
+  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<Conversation[]>([]); 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
@@ -100,13 +96,14 @@ export default function DatabaseQueryApp({
 
   useEffect(() => {
     checkSettings();
+    fetchConversations()
     fetchDatabaseConnections();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (selectedConnectionId !== null && conversations.length) {
-      fetchConversations(selectedConnectionId);
+      fetchConversationsByConnection(selectedConnectionId);
     }
      // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConnectionId, conversations.length]);
@@ -121,7 +118,7 @@ export default function DatabaseQueryApp({
 
   const checkSettings = async () => {
     try {
-      const response = await fetch("/api/settings");
+      const response = await fetch(`${BASE_PATH}/api/settings`);
       if (!response.ok) {
         throw new Error("Failed to fetch settings");
       }
@@ -137,7 +134,7 @@ export default function DatabaseQueryApp({
 
   const fetchDatabaseConnections = async () => {
     try {
-      const response = await fetch("/api/settings");
+      const response = await fetch(`${BASE_PATH}/api/settings`);
       if (!response.ok) {
         throw new Error("Failed to fetch database connections");
       }
@@ -151,13 +148,25 @@ export default function DatabaseQueryApp({
     }
   };
 
+  const fetchConversations = async () => {
+    try {
+      const response = await fetch(`${BASE_PATH}/api/conversations`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch database connections");
+      }
+      const data = await response.json();
+      setConversations(data.conversations); 
+    } catch (error) {
+      console.error("Error fetching database connections:", error);
+    }
+  };
 
-  const fetchConversations = async (connectionId: number) => {
+  const fetchConversationsByConnection = async (connectionId: number) => {
     const data = conversations.filter(
       (conversation) => conversation.connectionId === connectionId
     );
     setCurrentConversation(data);
-};
+ };
 
   const handleConnectionSelect = (connectionId: number) => {
     setSelectedConnectionId(connectionId);
@@ -171,7 +180,7 @@ export default function DatabaseQueryApp({
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/query", {
+      const response = await fetch(`${BASE_PATH}/api/query`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -257,7 +266,8 @@ export default function DatabaseQueryApp({
       "TRUNCATE"
     ];
     const upperCaseSql = sql.toUpperCase();
-    return sideEffectKeywords.some((keyword) => upperCaseSql.includes(keyword));
+    // match keyward+space to avoid false positives
+    return sideEffectKeywords.some((keyword) => new RegExp(`\\b${keyword}\\b`, 'i').test(upperCaseSql));
   };
 
   const runSQL = async (sql: string, messageId: number) => {
@@ -291,7 +301,7 @@ export default function DatabaseQueryApp({
     }
 
     try {
-      const response = await fetch("/api/run-sql", {
+      const response = await fetch(`${BASE_PATH}/api/run-sql`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -345,7 +355,7 @@ export default function DatabaseQueryApp({
     setConversationId(conversation.id);
     try {
       const response = await fetch(
-        `/api/conversation/${conversation.id}?connectionId=${selectedConnectionId}`
+        `${BASE_PATH}/api/conversations/${conversation.id}?connectionId=${selectedConnectionId}`
       );
       if (!response.ok) {
         throw new Error("Failed to fetch conversation");

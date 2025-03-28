@@ -27,6 +27,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
+const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 
 interface DatabaseConnection {
   id?: number;
@@ -47,7 +48,6 @@ interface Settings {
   };
   databaseConnections: DatabaseConnection[];
 }
-
 const DEFAULT_SYSTEM_PROMPT = `You are an AI assistant specialized in converting natural language queries into SQL statements. Your task is to generate SQL queries based on user input and the provided database schema. Follow these guidelines strictly:
 
 1. Respond ONLY with SQL code wrapped in \`\`\`sql code blocks. Do not provide any explanations, comments, or additional text outside the code blocks.
@@ -142,7 +142,7 @@ export default function SettingsPage() {
 
   const fetchSettings = async () => {
     try {
-      const response = await fetch("/api/settings");
+      const response = await fetch(`${BASE_PATH}/api/settings`);
       if (!response.ok) {
         throw new Error("Failed to fetch settings");
       }
@@ -219,7 +219,7 @@ export default function SettingsPage() {
     }
     const connection = settings.databaseConnections[index];
     try {
-      const response = await fetch("/api/connections", {
+      const response = await fetch(`${BASE_PATH}/api/connections`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -260,7 +260,7 @@ export default function SettingsPage() {
     setIsSaving(true);
     setError(null);
     try {
-      const response = await fetch("/api/settings", {
+      const response = await fetch(`${BASE_PATH}/api/settings`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -288,7 +288,7 @@ export default function SettingsPage() {
       return removeDatabaseConnection(connectionToDelete);
     }
     try {
-      const response = await fetch(`/api/connections/${connectionId}`, {
+      const response = await fetch(`${BASE_PATH}/api/connections/${connectionId}`, {
         method: "DELETE"
       });
 

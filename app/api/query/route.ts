@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     // Combine system prompt with SQL examples and current connection info
     let fullSystemPrompt = settings.systemPrompt;
     if (currentConnection && currentConnection.schema.trim() !== '') {
-      fullSystemPrompt += '\n\nHere are some example SQL queries for reference:\n' + currentConnection.schema;
+      fullSystemPrompt += '\n\nHere are the full database schemas for reference:\n' + currentConnection.schema;
     }
     fullSystemPrompt += `\n\nCurrent database connection: ${currentConnection.projectName} (${currentConnection.dbDriver})`;
 
@@ -68,7 +68,7 @@ export async function POST(request: NextRequest) {
           } as OpenAI.Chat.ChatCompletionMessageParam)
       )
     ];
-
+    console.log("messages to server", messages)
     // Generate response from Azure OpenAI
     const aiResponse = await generateChatResponse(messages);
 
