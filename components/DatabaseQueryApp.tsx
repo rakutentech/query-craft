@@ -36,6 +36,7 @@ import {
   Database
 } from "lucide-react";
 import { format, parseISO, addHours } from "date-fns";
+import ReactMarkdown from 'react-markdown';
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 
 interface QueryResult {
@@ -406,12 +407,73 @@ export default function DatabaseQueryApp() {
   };
 
   const renderMessage = (message: Message) => {
-    const isSQL = message.sender === "system" && message.sql;
     const isError = message.error;
+
+    const renderContent = (content: string) => {
+      // Split content into parts based on SQL code blocks
+      const parts = content.split(/(```sql[\s\S]*?```)/);
+      
+      return parts.map((part, index) => {
+        if (part.startsWith('```sql')) {
+          // Handle SQL block
+          const sql = part.replace('```sql', '').replace('```', '').trim();
+          return (
+            <div key={index} className="my-3 bg-blue-100 text-blue-900 p-3 rounded-lg">
+              <div className="flex justify-between items-center mb-2">
+                <p className="font-semibold">Generated SQL:</p>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => copyToClipboard(sql)}
+                      >
+                        <ClipboardCopy className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Copy SQL</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </div>
+              <pre className="bg-gray-800 text-gray-100 p-2 rounded-md overflow-x-auto">
+                <code>{sql}</code>
+              </pre>
+              <div className="mt-3 space-x-2">
+                <Button
+                  onClick={() => explainSQL(sql, message.id)}
+                  size="sm"
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                >
+                  <Search className="w-4 h-4 mr-2" />
+                  Explain
+                </Button>
+                <Button
+                  onClick={() => runSQL(sql, message.id)}
+                  size="sm"
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  <Play className="w-4 h-4 mr-2" />
+                  Run SQL
+                </Button>
+              </div>
+            </div>
+          );
+        } else {
+          // Handle regular text with markdown support
+          return part.trim() ? (
+            <div key={index} className="prose dark:prose-invert max-w-none">
+              <ReactMarkdown>{part}</ReactMarkdown>
+            </div>
+          ) : null;
+        }
+      });
+    };
+
     const messageClass = isError
       ? "bg-red-100 text-red-900"
-      : isSQL
-      ? "bg-blue-100 text-blue-900"
       : message.sender === "user"
       ? "bg-blue-500 text-white"
       : "bg-gray-100 text-gray-800";
@@ -507,67 +569,14 @@ export default function DatabaseQueryApp() {
               )}
             </AvatarFallback>
           </Avatar>
-          <div
-            className={`rounded-lg p-3 ${messageClass} max-w-[600px] shadow-md`}
-          >
+          <div className={`rounded-lg p-3 ${messageClass} max-w-[600px] shadow-md`}>
             {isError ? (
               <Alert variant="destructive">
                 <AlertTitle>Error</AlertTitle>
                 <AlertDescription>{message.content}</AlertDescription>
               </Alert>
-            ) : isSQL ? (
-              <>
-                <div className="flex justify-between items-center mb-2">
-                  <p className="font-semibold">Generated SQL:</p>
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() =>
-                            message.sql && copyToClipboard(message.sql)
-                          }
-                        >
-                          <ClipboardCopy className="h-4 w-4" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        <p>Copy SQL</p>
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
-                </div>
-                <pre className="bg-gray-800 text-gray-100 p-2 rounded-md overflow-x-auto">
-                  <code>{message.sql}</code>
-                </pre>
-              </>
             ) : (
-              <p className="whitespace-pre-wrap break-words">
-                {message.content}
-              </p>
-            )}
-            {isSQL && !isError && (
-              <div className="mt-3 space-x-2">
-                <Button
-                  onClick={() =>
-                    message.sql && explainSQL(message.sql, message.id)
-                  }
-                  size="sm"
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <Search className="w-4 h-4 mr-2" />
-                  Explain
-                </Button>
-                <Button
-                  onClick={() => message.sql && runSQL(message.sql, message.id)}
-                  size="sm"
-                  className="bg-green-600 hover:bg-green-700 text-white"
-                >
-                  <Play className="w-4 h-4 mr-2" />
-                  Run SQL
-                </Button>
-              </div>
+              renderContent(message.content)
             )}
             {message.result && (
               <div className="mt-3 bg-white rounded-md shadow-inner overflow-x-auto">
@@ -667,7 +676,7 @@ export default function DatabaseQueryApp() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <ScrollArea className="h-[calc(100vh-500px)]">
+                <ScrollArea className="h-[calc(99vh-500px)] overflow-y-auto">
                   <ul className="divide-y divide-gray-200">
                     {selectedConnectionId &&
                       currentConversation?.map(

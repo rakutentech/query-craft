@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
     let currentConversationId = conversationId;
     if (!currentConversationId) {
       currentConversationId = await createConversation(
-        query.substring(0, 50) + "...",
+        query.substring(0, 20) + "...",
         connectionId
       );
     }

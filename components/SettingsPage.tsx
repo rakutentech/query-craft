@@ -48,31 +48,40 @@ interface Settings {
   };
   databaseConnections: DatabaseConnection[];
 }
-const DEFAULT_SYSTEM_PROMPT = `You are an AI assistant specialized in converting natural language queries into SQL statements. Your task is to generate SQL queries based on user input and the provided database schema. Follow these guidelines strictly:
+const DEFAULT_SYSTEM_PROMPT = `You are an AI assistant specialized in converting natural language queries into SQL statements. Your task is to generate SQL queries based on user input and the provided database schema. Follow these guidelines:
 
-1. Respond ONLY with SQL code wrapped in \`\`\`sql code blocks. Do not provide any explanations, comments, or additional text outside the code blocks.
+1. Structure your responses in a clear format:
+   - Start with a brief explanation of what the query will do when NEEDED
+   - Present the SQL code wrapped in \`\`\`sql code blocks
+   - Add any necessary additional explanations or notes after the SQL ONLY When NEEDED
 
-2. Use appropriate JOIN clauses when queries involve multiple tables.
+2. When generating SQL queries:
+   - Use appropriate JOIN clauses when queries involve multiple tables
+   - Implement WHERE clauses to filter data based on requirements
+   - Utilize aggregate functions (COUNT, SUM, AVG, etc.) and GROUP BY clauses when appropriate
+   - Apply ORDER BY clauses to sort results as needed
+   - Use LIMIT clauses to restrict the number of results when appropriate
 
-3. Implement WHERE clauses to filter data based on the user's requirements.
+3. Always reference the provided database schema when generating queries. If a user asks about tables or columns not present in the schema, generate a query using the closest matching available tables and columns.
 
-4. Utilize aggregate functions (COUNT, SUM, AVG, etc.) and GROUP BY clauses when appropriate for data analysis.
+4. If a query is ambiguous or you need more information, explain what additional details would be helpful, but still provide a best-effort query based on available information.
 
-5. Apply ORDER BY clauses to sort results as needed.
+5. Always mask values of easy_id column with: xxxxxxx
 
-6. Use LIMIT clauses to restrict the number of results when appropriate.
+6. For complex queries, you may provide multiple SQL blocks with explanations between them.
 
-7. If a query is ambiguous or you need more information, do not ask for clarification. Instead, make a best-effort attempt to generate a relevant SQL query based on the available information.
+Example response format:
+This query will fetch all active users and their total orders.
+\`\`\`sql
+SELECT u.username, COUNT(o.id) as total_orders
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id
+WHERE u.status = 'active'
+GROUP BY u.username;
+\`\`\`
+This will show us each active user and how many orders they've placed.
 
-8. Always reference the provided database schema when generating queries. If a user asks about tables or columns not present in the schema, generate a query using the closest matching available tables and columns.
-
-9. If you cannot generate a valid SQL query for any reason, return an empty SQL code block: \`\`\`sql\`\`\`
-
-10. Always mask values of easy_id column with: xxxxxxx
-
-Remember: Your entire response must be a single SQL query wrapped in \`\`\`sql code blocks. Do not include any other text or explanations in your response.
-
-`;
+Remember: Always ensure your SQL queries are practical and efficient, and provide clear explanations of what each query does.`;
 
 export default function SettingsPage() {
   const [settings, setSettings] = useState<Settings>({
@@ -393,7 +402,7 @@ export default function SettingsPage() {
                     handleDatabaseInputChange(
                       index,
                       "projectName",
-                      e.target.value
+                      e.target.value.trim()
                     )
                   }
                   placeholder="Enter project name"
@@ -410,7 +419,7 @@ export default function SettingsPage() {
                 <Select
                   value={connection.dbDriver}
                   onValueChange={(value) =>
-                    handleDatabaseInputChange(index, "dbDriver", value)
+                    handleDatabaseInputChange(index, "dbDriver", value.trim())
                   }
                   required
                 >
@@ -435,7 +444,7 @@ export default function SettingsPage() {
                   id={`dbHost-${index}`}
                   value={connection.dbHost}
                   onChange={(e) =>
-                    handleDatabaseInputChange(index, "dbHost", e.target.value)
+                    handleDatabaseInputChange(index, "dbHost", e.target.value.trim())
                   }
                   placeholder="e.g., localhost, 127.0.0.1"
                   required
@@ -452,7 +461,7 @@ export default function SettingsPage() {
                   id={`dbPort-${index}`}
                   value={connection.dbPort}
                   onChange={(e) =>
-                    handleDatabaseInputChange(index, "dbPort", e.target.value)
+                    handleDatabaseInputChange(index, "dbPort", e.target.value.trim())
                   }
                   placeholder="e.g., 3306, 5432"
                   required
@@ -472,7 +481,7 @@ export default function SettingsPage() {
                     handleDatabaseInputChange(
                       index,
                       "dbUsername",
-                      e.target.value
+                      e.target.value.trim()
                     )
                   }
                   placeholder="Enter database username"
@@ -494,7 +503,7 @@ export default function SettingsPage() {
                     handleDatabaseInputChange(
                       index,
                       "dbPassword",
-                      e.target.value
+                      e.target.value.trim()
                     )
                   }
                   placeholder="Enter database password"
@@ -512,7 +521,7 @@ export default function SettingsPage() {
                   id={`dbName-${index}`}
                   value={connection.dbName}
                   onChange={(e) =>
-                    handleDatabaseInputChange(index, "dbName", e.target.value)
+                    handleDatabaseInputChange(index, "dbName", e.target.value.trim())
                   }
                   placeholder="Enter database name"
                   required
@@ -545,7 +554,7 @@ export default function SettingsPage() {
                   id={`schema-${index}`}
                   value={connection.schema}
                   onChange={(e) =>
-                    handleDatabaseInputChange(index, "schema", e.target.value)
+                    handleDatabaseInputChange(index, "schema", e.target.value.trim())
                   }
                   placeholder="Database schema will be displayed here after testing the connection"
                   rows={10}
