@@ -13,7 +13,8 @@ let clientOptions: ClientOptions = {
   baseURL: `${azureBaseUrl}/openai/deployments/${azureDeploymentName}`,
   defaultQuery: { 'api-version': apiVersion || '2024-06-01' },
   defaultHeaders: { 'api-key': azureApiKey },
-  httpAgent: proxyURL ? new HttpsProxyAgent(proxyURL) : undefined
+  httpAgent: proxyURL ? new HttpsProxyAgent(proxyURL) : undefined,
+  timeout: 3000
 }
 
 const openai = new OpenAI(clientOptions);

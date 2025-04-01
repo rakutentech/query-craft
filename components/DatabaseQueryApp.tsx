@@ -36,6 +36,7 @@ import {
   Database
 } from "lucide-react";
 import { format, parseISO, addHours } from "date-fns";
+import ReactMarkdown from 'react-markdown';
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 
 interface QueryResult {
@@ -461,11 +462,11 @@ export default function DatabaseQueryApp() {
             </div>
           );
         } else {
-          // Handle regular text
+          // Handle regular text with markdown support
           return part.trim() ? (
-            <p key={index} className="whitespace-pre-wrap break-words mb-3">
-              {part}
-            </p>
+            <div key={index} className="prose dark:prose-invert max-w-none">
+              <ReactMarkdown>{part}</ReactMarkdown>
+            </div>
           ) : null;
         }
       });
@@ -675,7 +676,7 @@ export default function DatabaseQueryApp() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <ScrollArea className="h-[calc(100vh-500px)]">
+                <ScrollArea className="h-[calc(99vh-500px)] overflow-y-auto">
                   <ul className="divide-y divide-gray-200">
                     {selectedConnectionId &&
                       currentConversation?.map(

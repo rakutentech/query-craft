@@ -402,7 +402,7 @@ export default function SettingsPage() {
                     handleDatabaseInputChange(
                       index,
                       "projectName",
-                      e.target.value
+                      e.target.value.trim()
                     )
                   }
                   placeholder="Enter project name"
@@ -419,7 +419,7 @@ export default function SettingsPage() {
                 <Select
                   value={connection.dbDriver}
                   onValueChange={(value) =>
-                    handleDatabaseInputChange(index, "dbDriver", value)
+                    handleDatabaseInputChange(index, "dbDriver", value.trim())
                   }
                   required
                 >
@@ -444,7 +444,7 @@ export default function SettingsPage() {
                   id={`dbHost-${index}`}
                   value={connection.dbHost}
                   onChange={(e) =>
-                    handleDatabaseInputChange(index, "dbHost", e.target.value)
+                    handleDatabaseInputChange(index, "dbHost", e.target.value.trim())
                   }
                   placeholder="e.g., localhost, 127.0.0.1"
                   required
@@ -461,7 +461,7 @@ export default function SettingsPage() {
                   id={`dbPort-${index}`}
                   value={connection.dbPort}
                   onChange={(e) =>
-                    handleDatabaseInputChange(index, "dbPort", e.target.value)
+                    handleDatabaseInputChange(index, "dbPort", e.target.value.trim())
                   }
                   placeholder="e.g., 3306, 5432"
                   required
@@ -481,7 +481,7 @@ export default function SettingsPage() {
                     handleDatabaseInputChange(
                       index,
                       "dbUsername",
-                      e.target.value
+                      e.target.value.trim()
                     )
                   }
                   placeholder="Enter database username"
@@ -503,7 +503,7 @@ export default function SettingsPage() {
                     handleDatabaseInputChange(
                       index,
                       "dbPassword",
-                      e.target.value
+                      e.target.value.trim()
                     )
                   }
                   placeholder="Enter database password"
@@ -521,7 +521,7 @@ export default function SettingsPage() {
                   id={`dbName-${index}`}
                   value={connection.dbName}
                   onChange={(e) =>
-                    handleDatabaseInputChange(index, "dbName", e.target.value)
+                    handleDatabaseInputChange(index, "dbName", e.target.value.trim())
                   }
                   placeholder="Enter database name"
                   required
@@ -554,7 +554,7 @@ export default function SettingsPage() {
                   id={`schema-${index}`}
                   value={connection.schema}
                   onChange={(e) =>
-                    handleDatabaseInputChange(index, "schema", e.target.value)
+                    handleDatabaseInputChange(index, "schema", e.target.value.trim())
                   }
                   placeholder="Database schema will be displayed here after testing the connection"
                   rows={10}
