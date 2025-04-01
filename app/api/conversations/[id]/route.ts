@@ -1,4 +1,4 @@
-// app/api/conversation/[id]/route.ts
+// app/api/conversations/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getConversationByConnectionId, getConversationMessages } from '@/app/lib/db';
 
