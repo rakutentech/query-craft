@@ -33,10 +33,12 @@ import {
   Bot,
   User,
   Send,
-  Database
+  Database,
+  RotateCcw
 } from "lucide-react";
 import { format, parseISO, addHours } from "date-fns";
 import ReactMarkdown from 'react-markdown';
+import { Textarea } from "@/components/ui/textarea";
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 
 interface QueryResult {
@@ -56,6 +58,7 @@ interface Message {
   sql?: string;
   result?: QueryResult[] | QueryResponse;
   error?: boolean;
+  editedSql?: string;
 }
 
 interface DatabaseConnection {
@@ -94,6 +97,7 @@ export default function DatabaseQueryApp() {
   >(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+  const [editingSqlId, setEditingSqlId] = useState<number | null>(null);
 
   useEffect(() => {
     checkSettings();
@@ -406,44 +410,78 @@ export default function DatabaseQueryApp() {
     );
   };
 
+  const handleSqlEdit = (messageId: number, sql: string) => {
+    setMessages(prev => prev.map(msg => 
+      msg.id === messageId ? { ...msg, editedSql: sql } : msg
+    ));
+  };
+
+  const handleSqlSave = (messageId: number) => {
+    setMessages(prev => prev.map(msg => 
+      msg.id === messageId ? { ...msg, sql: msg.editedSql } : msg
+    ));
+    setEditingSqlId(null);
+  };
+
   const renderMessage = (message: Message) => {
     const isError = message.error;
 
     const renderContent = (content: string) => {
-      // Split content into parts based on SQL code blocks
       const parts = content.split(/(```sql[\s\S]*?```)/);
       
       return parts.map((part, index) => {
         if (part.startsWith('```sql')) {
-          // Handle SQL block
           const sql = part.replace('```sql', '').replace('```', '').trim();
+          const messageId = message.id;
+          const isEditing = editingSqlId === messageId;
+          const currentSql = message.editedSql || sql;
+
           return (
             <div key={index} className="my-3 bg-blue-100 text-blue-900 p-3 rounded-lg">
               <div className="flex justify-between items-center mb-2">
                 <p className="font-semibold">Generated SQL:</p>
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => copyToClipboard(sql)}
-                      >
-                        <ClipboardCopy className="h-4 w-4" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent>
-                      <p>Copy SQL</p>
-                    </TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
+                <div className="flex gap-2">
+                  {!isEditing && (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => copyToClipboard(currentSql)}
+                          >
+                            <ClipboardCopy className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>Copy SQL</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => isEditing ? handleSqlSave(messageId) : setEditingSqlId(messageId)}
+                  >
+                    {isEditing ? 'Save' : 'Edit'}
+                  </Button>
+                </div>
               </div>
-              <pre className="bg-gray-800 text-gray-100 p-2 rounded-md overflow-x-auto">
-                <code>{sql}</code>
-              </pre>
+              {isEditing ? (
+                <Textarea
+                  value={currentSql}
+                  onChange={(e) => handleSqlEdit(messageId, e.target.value)}
+                  className="font-mono bg-gray-800 text-gray-100 p-2 rounded-md w-full min-h-[100px]"
+                />
+              ) : (
+                <pre className="bg-gray-800 text-gray-100 p-2 rounded-md overflow-x-auto">
+                  <code>{currentSql}</code>
+                </pre>
+              )}
               <div className="mt-3 space-x-2">
                 <Button
-                  onClick={() => explainSQL(sql, message.id)}
+                  onClick={() => explainSQL(currentSql, messageId)}
                   size="sm"
                   className="bg-blue-600 hover:bg-blue-700 text-white"
                 >
@@ -451,13 +489,27 @@ export default function DatabaseQueryApp() {
                   Explain
                 </Button>
                 <Button
-                  onClick={() => runSQL(sql, message.id)}
+                  onClick={() => runSQL(currentSql, messageId)}
                   size="sm"
                   className="bg-green-600 hover:bg-green-700 text-white"
                 >
                   <Play className="w-4 h-4 mr-2" />
                   Run SQL
                 </Button>
+                {isEditing && (
+                  <Button
+                    onClick={() => {
+                      handleSqlEdit(messageId, sql);
+                      setEditingSqlId(null);
+                    }}
+                    size="sm"
+                    variant="outline"
+                    className="text-red-600 border-red-600"
+                  >
+                    <RotateCcw className="w-4 h-4 mr-2" />
+                    Reset
+                  </Button>
+                )}
               </div>
             </div>
           );
