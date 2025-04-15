@@ -1,0 +1,14 @@
+{
+  "databaseConnections": [
+    {
+      "projectName": "Default Project",
+      "dbDriver": "mysql",
+      "dbHost": "localhost",
+      "dbPort": "3306",
+      "dbUsername": "username",
+      "dbPassword": "password",
+      "dbName": "database_name",
+      "schema": ""
+    }
+  ]
+}
