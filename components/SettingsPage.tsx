@@ -149,6 +149,20 @@ export default function SettingsPage() {
     setDeleteDialogOpen(true);
   };
 
+  const fetchDefaultSettings = async () => {
+    try {
+      const response = await fetch("/defaultDatabaseConfig.json");
+      if (!response.ok) {
+        throw new Error("Failed to fetch default settings");
+      }
+      const defaultSettings = await response.json();
+      return defaultSettings;
+    } catch (error) {
+      console.error("Error fetching default settings:", error);
+      return null;
+    }
+  };
+
   const fetchSettings = async () => {
     try {
       const response = await fetch(`${BASE_PATH}/api/settings`);
@@ -156,14 +170,19 @@ export default function SettingsPage() {
         throw new Error("Failed to fetch settings");
       }
       let data = await response.json();
-      if (data) {
-        if (!data.settings.systemPrompt) {
-          data.settings.systemPrompt = DEFAULT_SYSTEM_PROMPT;
-        }
+      if (data && data.databaseConnections.length > 0) {
         setSettings({
-          aiSettings: data.settings,
-          databaseConnections: data.databaseConnections || []
+          aiSettings: data.settings || { id: 1, systemPrompt: DEFAULT_SYSTEM_PROMPT },
+          databaseConnections: data.databaseConnections
         });
+      } else {
+        const defaultSettings = await fetchDefaultSettings();
+        if (defaultSettings) {
+          setSettings({
+            aiSettings: { id: 1, systemPrompt: DEFAULT_SYSTEM_PROMPT },
+            databaseConnections: defaultSettings.databaseConnections
+          });
+        }
       }
     } catch (error) {
       console.error("Error fetching settings:", error);
