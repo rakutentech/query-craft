@@ -98,20 +98,20 @@ export default function DatabaseQueryApp() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const [editingSqlId, setEditingSqlId] = useState<number | null>(null);
+  const conversationsCache = useRef<Map<number, Conversation[]>>(new Map());
 
   useEffect(() => {
     checkSettings();
-    fetchConversations()
     fetchDatabaseConnections();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (selectedConnectionId !== null && conversations.length) {
+    if (selectedConnectionId !== null) {
       fetchConversationsByConnection(selectedConnectionId);
     }
-     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedConnectionId, conversations.length]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedConnectionId]);
 
   useEffect(() => {
     scrollToBottom();
@@ -153,25 +153,28 @@ export default function DatabaseQueryApp() {
     }
   };
 
-  const fetchConversations = async () => {
+  const fetchConversationsByConnection = async (connectionId: number) => {
+    // Check cache first
+    if (conversationsCache.current.has(connectionId)) {
+      setCurrentConversation(conversationsCache.current.get(connectionId)!);
+      return;
+    }
+
     try {
-      const response = await fetch(`${BASE_PATH}/api/conversations`);
+      const response = await fetch(`${BASE_PATH}/api/conversations?connectionId=${connectionId}`);
       if (!response.ok) {
-        throw new Error("Failed to fetch database connections");
+        throw new Error("Failed to fetch conversations");
       }
       const data = await response.json();
-      setConversations(data.conversations); 
+      const conversations = data.conversations;
+      
+      // Update cache
+      conversationsCache.current.set(connectionId, conversations);
+      setCurrentConversation(conversations);
     } catch (error) {
-      console.error("Error fetching database connections:", error);
+      console.error("Error fetching conversations:", error);
     }
   };
-
-  const fetchConversationsByConnection = async (connectionId: number) => {
-    const data = conversations.filter(
-      (conversation) => conversation.connectionId === connectionId
-    );
-    setCurrentConversation(data);
- };
 
   const handleConnectionSelect = (connectionId: number) => {
     setSelectedConnectionId(connectionId);
@@ -233,17 +236,18 @@ export default function DatabaseQueryApp() {
       }
 
       if (!conversationId && selectedConnectionId !== null) {
-        setConversations((prev) => ([
-            {
-              id: data.conversationId,
-              connectionId: selectedConnectionId,
-              title: inputMessage.substring(0, 50) + "...",
-              timestamp: new Date().toISOString(),
-            },
-            ...prev
-          ]));
+        const newConversation = {
+          id: data.conversationId,
+          connectionId: selectedConnectionId,
+          title: inputMessage.substring(0, 50) + "...",
+          timestamp: new Date().toISOString(),
         };
-      
+        
+        // Update cache
+        const currentConversations = conversationsCache.current.get(selectedConnectionId) || [];
+        conversationsCache.current.set(selectedConnectionId, [newConversation, ...currentConversations]);
+        setCurrentConversation([newConversation, ...currentConversations]);
+      }
     } catch (error) {
       console.error("Error executing query:", error);
       const errorMessage: Message = {
