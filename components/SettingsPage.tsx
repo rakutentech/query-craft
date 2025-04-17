@@ -116,6 +116,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetchSettings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const RequiredLabel = ({ htmlFor, children }: { htmlFor: string, children: React.ReactNode }) => (

@@ -161,7 +161,13 @@ export default function DatabaseQueryApp() {
     }
 
     try {
-      const response = await fetch(`${BASE_PATH}/api/conversations?connectionId=${connectionId}`);
+      const response = await fetch(`${BASE_PATH}/api/conversations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ connectionId }),
+      });
       if (!response.ok) {
         throw new Error("Failed to fetch conversations");
       }

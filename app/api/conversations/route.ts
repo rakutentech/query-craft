@@ -2,10 +2,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getConversations, getConversationByConnectionId } from '@/app/lib/db';
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const connectionId = searchParams.get('connectionId');
+    const { connectionId } = await request.json();
 
     let conversations;
     if (connectionId) {
