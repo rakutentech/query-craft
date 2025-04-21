@@ -29,6 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
+import test from "node:test";
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 
 interface DatabaseConnection {
@@ -243,10 +244,10 @@ export default function SettingsPage() {
     }));
   };
 
-  const testAndSaveConnection = async (index: number) => {
+  const testAndSaveConnection = async (index: number): Promise<boolean> => {
     if (!validateForm()) {
       setError("Please fill in all required fields");
-      return;
+      return false;
     }
     const connection = settings.databaseConnections[index];
     try {
@@ -271,11 +272,13 @@ export default function SettingsPage() {
           };
           return { ...prev, databaseConnections: newConnections };
         });
+        return true;
       } else {
         setTestConnectionResult((prev) => ({
           ...prev,
           [index]: result.message || "Connection test failed"
         }));
+        return false;
       }
     } catch (error) {
       console.error("Error testing and saving connection:", error);
@@ -283,6 +286,7 @@ export default function SettingsPage() {
         ...prev,
         [index]: (error as any).message || "Connection test failed"
       }));
+      return false;
     }
   };
 
@@ -294,15 +298,13 @@ export default function SettingsPage() {
     setIsSaving(true);
     setError(null);
     try {
-      // Iterate over connections and test those without a schema
+      // Iterate over connections and test them before saving
       for (let index = 0; index < settings.databaseConnections.length; index++) {
-        const connection = settings.databaseConnections[index];
-        if (!connection.schema) {
-          if (testConnectionResult[index] !== "Connection successful and schema saved") {
-            setError(`Connection test failed for Database Connection ${index + 1}. Please fix the connection and try again.`);
-            setIsSaving(false);
-            return;
-          }
+        const success = await testAndSaveConnection(index);
+        if (!success) {
+          setError(`Connection test failed for Database Connection ${index + 1}. Please fix the connection and try again.`);
+          setIsSaving(false);
+          return;
         }
       }
 
@@ -572,7 +574,13 @@ export default function SettingsPage() {
                     />
                   </div>
                   {testConnectionResult[index] && (
-                    <p className="text-red-500 text-sm mt-1">
+                    <p
+                      className={
+                        testConnectionResult[index] === "Connection successful and schema saved"
+                          ? "text-green-500 text-sm mt-1"
+                          : "text-red-500 text-sm mt-1"
+                      }
+                    >
                       {testConnectionResult[index]}
                     </p>
                   )}
