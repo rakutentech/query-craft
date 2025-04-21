@@ -270,7 +270,6 @@ export default function SettingsPage() {
           return { ...prev, databaseConnections: newConnections };
         });
       } else {
-        console.log("testAndSaveConnection: %s", result.error);
         setTestConnectionResult((prev) => ({
           ...prev,
           [index]: result.message || "Connection test failed"
@@ -280,15 +279,33 @@ export default function SettingsPage() {
       console.error("Error testing and saving connection:", error);
       setTestConnectionResult((prev) => ({
         ...prev,
-        [index]: "Connection test failed"
+        [index]: error.message || "Connection test failed"
       }));
     }
   };
 
   const handleSave = async () => {
+    if (!validateForm()) {
+      setError("Please fill in all required fields");
+      return;
+    }
     setIsSaving(true);
     setError(null);
     try {
+      // Iterate over connections and test those without a schema
+      for (let index = 0; index < settings.databaseConnections.length; index++) {
+        const connection = settings.databaseConnections[index];
+        if (!connection.schema) {
+          const testResult = await testAndSaveConnection(index);
+          if (testConnectionResult[index] !== "Connection successful and schema saved") {
+            setError(`Connection test failed for Database Connection ${index + 1}. Please fix the connection and try again.`);
+            setIsSaving(false);
+            return;
+          }
+        }
+      }
+
+      // Save all settings if all tests pass
       const response = await fetch(`${BASE_PATH}/api/settings`, {
         method: "POST",
         headers: {
@@ -296,6 +313,7 @@ export default function SettingsPage() {
         },
         body: JSON.stringify(settings)
       });
+
       if (!response.ok) {
         throw new Error("Failed to save settings");
       }
@@ -389,207 +407,202 @@ export default function SettingsPage() {
           </CardContent>
           
         </Card>
-        <div className="flex justify-end space-x-4">
-            <Button variant="outline" onClick={() => router.push("/")}>
-              Cancel
-            </Button>
-            <Button onClick={handleSave} disabled={isSaving}>
-              {isSaving ? "Saving..." : "Save Settings"}
-            </Button>
-          </div>
-        {settings.databaseConnections.map((connection, index) => (
-          <Card key={index}>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <h2 className="text-xl font-semibold">
-                Database Connection {index + 1}
-              </h2>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleDeleteConnection(index)}
-                className="text-red-600"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-              <RequiredLabel htmlFor={`projectName-${index}`}>Project Name</RequiredLabel>
-                <Input
-                  id={`projectName-${index}`}
-                  value={connection.projectName}
-                  onChange={(e) =>
-                    handleDatabaseInputChange(
-                      index,
-                      "projectName",
-                      e.target.value.trim()
-                    )
-                  }
-                  placeholder="Enter project name"
-                  required
-                />
-                {formErrors[`projectName-${index}`] && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {formErrors[`projectName-${index}`]}
-                  </p>
-                )}
-              </div>
-              <div>
-                <RequiredLabel htmlFor={`dbDriver-${index}`}>Driver</RequiredLabel>
-                <Select
-                  value={connection.dbDriver}
-                  onValueChange={(value) =>
-                    handleDatabaseInputChange(index, "dbDriver", value.trim())
-                  }
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a database driver" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="mysql">MySQL</SelectItem>
-                    <SelectItem value="postgresql">PostgreSQL</SelectItem>
-                    <SelectItem value="mariadb">MariaDB</SelectItem>
-                  </SelectContent>
-                </Select>
-                {formErrors[`dbDriver-${index}`] && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {formErrors[`dbDriver-${index}`]}
-                  </p>
-                )}
-              </div>
-              <div>
-                <RequiredLabel htmlFor={`dbHost-${index}`}>Host</RequiredLabel>
-                <Input
-                  id={`dbHost-${index}`}
-                  value={connection.dbHost}
-                  onChange={(e) =>
-                    handleDatabaseInputChange(index, "dbHost", e.target.value.trim())
-                  }
-                  placeholder="e.g., localhost, 127.0.0.1"
-                  required
-                />
-                {formErrors[`dbHost-${index}`] && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {formErrors[`dbHost-${index}`]}
-                  </p>
-                )}
-              </div>
-              <div>
-                <RequiredLabel htmlFor={`dbPort-${index}`}>Port</RequiredLabel>
-                <Input
-                  id={`dbPort-${index}`}
-                  value={connection.dbPort}
-                  onChange={(e) =>
-                    handleDatabaseInputChange(index, "dbPort", e.target.value.trim())
-                  }
-                  placeholder="e.g., 3306, 5432"
-                  required
-                />
-                {formErrors[`dbPort-${index}`] && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {formErrors[`dbPort-${index}`]}
-                  </p>
-                )}
-              </div>
-              <div>
-                <RequiredLabel htmlFor={`dbUsername-${index}`}>Username</RequiredLabel>
-                <Input
-                  id={`dbUsername-${index}`}
-                  value={connection.dbUsername}
-                  onChange={(e) =>
-                    handleDatabaseInputChange(
-                      index,
-                      "dbUsername",
-                      e.target.value.trim()
-                    )
-                  }
-                  placeholder="Enter database username"
-                  required
-                />
-                {formErrors[`dbUsername-${index}`] && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {formErrors[`dbUsername-${index}`]}
-                  </p>
-                )}
-              </div>
-              <div>
-                <RequiredLabel htmlFor={`dbPassword-${index}`}>Password</RequiredLabel>
-                <Input
-                  id={`dbPassword-${index}`}
-                  type="password"
-                  value={connection.dbPassword}
-                  onChange={(e) =>
-                    handleDatabaseInputChange(
-                      index,
-                      "dbPassword",
-                      e.target.value.trim()
-                    )
-                  }
-                  placeholder="Enter database password"
-                  required
-                />
-                {formErrors[`dbPassword-${index}`] && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {formErrors[`dbPassword-${index}`]}
-                  </p>
-                )}
-              </div>
-              <div>
-                <RequiredLabel htmlFor={`dbName-${index}`}>Database Name</RequiredLabel>
-                <Input
-                  id={`dbName-${index}`}
-                  value={connection.dbName}
-                  onChange={(e) =>
-                    handleDatabaseInputChange(index, "dbName", e.target.value.trim())
-                  }
-                  placeholder="Enter database name"
-                  required
-                />
-                {formErrors[`dbName-${index}`] && (
-                  <p className="text-red-500 text-sm mt-1">
-                    {formErrors[`dbName-${index}`]}
-                  </p>
-                )}
-              </div>
-              <div className="flex justify-between items-center">
-                <Button onClick={() => testAndSaveConnection(index)}>
-                  Test and Save
-                </Button>
-                {testConnectionResult[index] && (
-                  <span
-                    className={
-                      testConnectionResult[index].includes("successful")
-                        ? "text-green-500"
-                        : "text-red-500"
-                    }
+        <div className="grid grid-cols-3 gap-4">
+          {settings.databaseConnections.map((connection, index) => (
+            <div key={index}>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <h2 className="text-xl font-semibold">
+                    Database Connection {index + 1}
+                  </h2>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => handleDeleteConnection(index)}
+                    className="text-red-600"
                   >
-                    {testConnectionResult[index]}
-                  </span>
-                )}
-              </div>
-              <div>
-                <Label htmlFor={`schema-${index}`}>Schema</Label>
-                <Textarea
-                  id={`schema-${index}`}
-                  value={connection.schema}
-                  onChange={(e) =>
-                    handleDatabaseInputChange(index, "schema", e.target.value.trim())
-                  }
-                  placeholder="Database schema will be displayed here after testing the connection"
-                  rows={10}
-                  // readOnly
-                />
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div>
+                    <RequiredLabel htmlFor={`projectName-${index}`}>Project Name</RequiredLabel>
+                    <Input
+                      id={`projectName-${index}`}
+                      value={connection.projectName}
+                      onChange={(e) =>
+                        handleDatabaseInputChange(
+                          index,
+                          "projectName",
+                          e.target.value.trim()
+                        )
+                      }
+                      placeholder="Enter project name"
+                      required
+                    />
+                    {formErrors[`projectName-${index}`] && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {formErrors[`projectName-${index}`]}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <RequiredLabel htmlFor={`dbDriver-${index}`}>Driver</RequiredLabel>
+                    <Select
+                      value={connection.dbDriver}
+                      onValueChange={(value) =>
+                        handleDatabaseInputChange(index, "dbDriver", value.trim())
+                      }
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select a database driver" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="mysql">MySQL</SelectItem>
+                        <SelectItem value="postgresql">PostgreSQL</SelectItem>
+                        <SelectItem value="mariadb">MariaDB</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {formErrors[`dbDriver-${index}`] && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {formErrors[`dbDriver-${index}`]}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <RequiredLabel htmlFor={`dbHost-${index}`}>Host</RequiredLabel>
+                    <Input
+                      id={`dbHost-${index}`}
+                      value={connection.dbHost}
+                      onChange={(e) =>
+                        handleDatabaseInputChange(index, "dbHost", e.target.value.trim())
+                      }
+                      placeholder="e.g., localhost, 127.0.0.1"
+                      required
+                    />
+                    {formErrors[`dbHost-${index}`] && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {formErrors[`dbHost-${index}`]}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <RequiredLabel htmlFor={`dbPort-${index}`}>Port</RequiredLabel>
+                    <Input
+                      id={`dbPort-${index}`}
+                      value={connection.dbPort}
+                      onChange={(e) =>
+                        handleDatabaseInputChange(index, "dbPort", e.target.value.trim())
+                      }
+                      placeholder="e.g., 3306, 5432"
+                      required
+                    />
+                    {formErrors[`dbPort-${index}`] && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {formErrors[`dbPort-${index}`]}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <RequiredLabel htmlFor={`dbUsername-${index}`}>Username</RequiredLabel>
+                    <Input
+                      id={`dbUsername-${index}`}
+                      value={connection.dbUsername}
+                      onChange={(e) =>
+                        handleDatabaseInputChange(
+                          index,
+                          "dbUsername",
+                          e.target.value.trim()
+                        )
+                      }
+                      placeholder="Enter database username"
+                      required
+                    />
+                    {formErrors[`dbUsername-${index}`] && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {formErrors[`dbUsername-${index}`]}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <RequiredLabel htmlFor={`dbPassword-${index}`}>Password</RequiredLabel>
+                    <Input
+                      id={`dbPassword-${index}`}
+                      type="password"
+                      value={connection.dbPassword}
+                      onChange={(e) =>
+                        handleDatabaseInputChange(
+                          index,
+                          "dbPassword",
+                          e.target.value.trim()
+                        )
+                      }
+                      placeholder="Enter database password"
+                      required
+                    />
+                    {formErrors[`dbPassword-${index}`] && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {formErrors[`dbPassword-${index}`]}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <RequiredLabel htmlFor={`dbName-${index}`}>Database Name</RequiredLabel>
+                    <Input
+                      id={`dbName-${index}`}
+                      value={connection.dbName}
+                      onChange={(e) =>
+                        handleDatabaseInputChange(index, "dbName", e.target.value.trim())
+                      }
+                      placeholder="Enter database name"
+                      required
+                    />
+                    {formErrors[`dbName-${index}`] && (
+                      <p className="text-red-500 text-sm mt-1">
+                        {formErrors[`dbName-${index}`]}
+                      </p>
+                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor={`schema-${index}`}>Schema</Label>
+                    <Textarea
+                      id={`schema-${index}`}
+                      value={connection.schema}
+                      onChange={(e) =>
+                        handleDatabaseInputChange(index, "schema", e.target.value.trim())
+                      }
+                      placeholder="Database schema will be displayed here after testing the connection"
+                      rows={10}
+                    />
+                  </div>
+                  {testConnectionResult[index] && (
+                    <p className="text-red-500 text-sm mt-1">
+                      {testConnectionResult[index]}
+                    </p>
+                  )}
+                  <div className="flex justify-end">
+                    <Button
+                      onClick={() => testAndSaveConnection(index)}
+                      className="mt-4"
+                    >
+                      Test Connection and Get Schema
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          ))}
+        </div>
         <Button onClick={addDatabaseConnection} className="w-full">
           <PlusCircle className="mr-2 h-4 w-4" /> Add Database Connection
         </Button>
-
-        
+        <div className="flex justify-end space-x-4">
+          <Button variant="outline" onClick={() => router.push("/")}>Cancel</Button>
+          <Button onClick={handleSave} disabled={isSaving}>
+            {isSaving ? "Saving..." : "Save All Settings"}
+          </Button>
+        </div>
       </div>
     </div>
   );
