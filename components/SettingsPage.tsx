@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Spinner } from "@radix-ui/themes";
+
 import {
   Select,
   SelectContent,
@@ -279,7 +281,7 @@ export default function SettingsPage() {
       console.error("Error testing and saving connection:", error);
       setTestConnectionResult((prev) => ({
         ...prev,
-        [index]: error.message || "Connection test failed"
+        [index]: (error as any).message || "Connection test failed"
       }));
     }
   };
@@ -296,7 +298,6 @@ export default function SettingsPage() {
       for (let index = 0; index < settings.databaseConnections.length; index++) {
         const connection = settings.databaseConnections[index];
         if (!connection.schema) {
-          const testResult = await testAndSaveConnection(index);
           if (testConnectionResult[index] !== "Connection successful and schema saved") {
             setError(`Connection test failed for Database Connection ${index + 1}. Please fix the connection and try again.`);
             setIsSaving(false);
@@ -363,12 +364,6 @@ export default function SettingsPage() {
       <h1 className="text-3xl font-bold mb-6 text-gray-800">
         QueryCraft Settings
       </h1>
-      {error && (
-        <Alert variant="destructive" className="mb-6">
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -586,7 +581,7 @@ export default function SettingsPage() {
                       onClick={() => testAndSaveConnection(index)}
                       className="mt-4"
                     >
-                      Test Connection and Get Schema
+                      Test and Get Schema
                     </Button>
                   </div>
                 </CardContent>
@@ -594,13 +589,19 @@ export default function SettingsPage() {
             </div>
           ))}
         </div>
+        {error && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertTitle>Error</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
         <Button onClick={addDatabaseConnection} className="w-full">
-          <PlusCircle className="mr-2 h-4 w-4" /> Add Database Connection
+        <PlusCircle className="mr-2 h-4 w-4" /> Add Database Connection
         </Button>
         <div className="flex justify-end space-x-4">
           <Button variant="outline" onClick={() => router.push("/")}>Cancel</Button>
           <Button onClick={handleSave} disabled={isSaving}>
-            {isSaving ? "Saving..." : "Save All Settings"}
+            {isSaving ? <Spinner /> : "Save Settings"}
           </Button>
         </div>
       </div>
