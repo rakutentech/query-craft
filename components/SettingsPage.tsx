@@ -394,14 +394,13 @@ export default function SettingsPage() {
               value={settings.aiSettings.systemPrompt}
               onChange={handleInputChange}
               placeholder="Enter system prompt for AI"
-              rows={5}
+              rows={20}
             />
             <p className="text-sm text-gray-500 mt-2">
               This prompt guides the AI in generating SQL queries. Be specific
               about the expected output and any constraints.
             </p>
           </CardContent>
-          
         </Card>
         <div className="grid grid-cols-3 gap-4">
           {settings.databaseConnections.map((connection, index) => (
