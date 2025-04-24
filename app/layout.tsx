@@ -4,6 +4,7 @@ import { inter } from "./fonts";
 import { Theme } from "@radix-ui/themes";
 import "@radix-ui/themes/styles.css";
 import "./globals.css";
+import packageJson from "../package.json";
 
 export const metadata: Metadata = {
   title: "Query Craft",
@@ -21,8 +22,9 @@ export default function RootLayout({
         <Theme>
           <nav className="bg-gray-800 text-white p-4">
             <div className="container mx-auto flex justify-between items-center">
-              <span className="text-xl font-bold">
+              <span className="text-xl font-bold flex items-center space-x-2">
                 <Link href="/">QueryCraft</Link>
+                <span className="text-sm text-gray-500">V{packageJson.version}</span>
               </span>
               <div className="space-x-4">
                 <Link href="/" className="hover:text-blue-300">
