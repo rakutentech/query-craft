@@ -34,7 +34,10 @@ import {
   User,
   Send,
   Database,
-  RotateCcw
+  RotateCcw,
+  Check,
+  Pencil,
+  Loader2
 } from "lucide-react";
 import { format, parseISO, addHours } from "date-fns";
 import ReactMarkdown from 'react-markdown';
@@ -82,7 +85,6 @@ export default function DatabaseQueryApp() {
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<number | null>(null);
-  const [autoRun, setAutoRun] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingSql, setPendingSql] = useState<{
@@ -98,6 +100,9 @@ export default function DatabaseQueryApp() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const [editingSqlId, setEditingSqlId] = useState<number | null>(null);
+  const [copySuccessId, setCopySuccessId] = useState<number | null>(null);
+  //  different state from send button loading operation, so that support multiple operations at the same time
+  const [loadingOperation, setLoadingOperation] = useState<{ type: 'explain' | 'run' | null; messageId: number | null }>({ type: null, messageId: null });
   const conversationsCache = useRef<Map<number, Conversation[]>>(new Map());
 
   useEffect(() => {
@@ -234,13 +239,6 @@ export default function DatabaseQueryApp() {
 
       setMessages(newMessages);
 
-      if (autoRun) {
-        const lastMessage = newMessages[newMessages.length - 1];
-        if (lastMessage.sql) {
-          await runSQL(lastMessage.sql, lastMessage.id);
-        }
-      }
-
       if (!conversationId && selectedConnectionId !== null) {
         const newConversation = {
           id: data.conversationId,
@@ -290,13 +288,17 @@ export default function DatabaseQueryApp() {
       setPendingSql({ sql, messageId });
       setShowConfirmDialog(true);
     } else {
+      setLoadingOperation({ type: 'run', messageId });
       await executeSql(sql, messageId);
+      setLoadingOperation({ type: null, messageId: null });
     }
   };
 
   const explainSQL = async (sql: string, messageId: number) => {
+    setLoadingOperation({ type: 'explain', messageId });
     const explainSql = `EXPLAIN ${sql}`;
     await executeSql(explainSql, messageId);
+    setLoadingOperation({ type: null, messageId: null });
   };
 
   const executeSql = async (sql: string, messageId: number) => {
@@ -409,10 +411,13 @@ export default function DatabaseQueryApp() {
     return format(japanTime, "yyyy-MM-dd HH:mm:ss");
   };
 
-  const copyToClipboard = (text: string) => {
+  const copyToClipboard = (text: string, messageId: number) => {
     navigator.clipboard.writeText(text).then(
       () => {
-        console.log("SQL copied to clipboard");
+        setCopySuccessId(messageId);
+        setTimeout(() => {
+          setCopySuccessId(null);
+        }, 2000);
       },
       (err) => {
         console.error("Could not copy text: ", err);
@@ -458,24 +463,37 @@ export default function DatabaseQueryApp() {
                           <Button
                             variant="ghost"
                             size="icon"
-                            onClick={() => copyToClipboard(currentSql)}
+                            onClick={() => copyToClipboard(currentSql, messageId)}
                           >
-                            <ClipboardCopy className="h-4 w-4" />
+                            {copySuccessId === messageId ? (
+                              <Check className="h-4 w-4 text-green-500" />
+                            ) : (
+                              <ClipboardCopy className="h-4 w-4" />
+                            )}
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent>
-                          <p>Copy SQL</p>
+                          <p>{copySuccessId === messageId ? 'Copied!' : 'Copy SQL'}</p>
                         </TooltipContent>
                       </Tooltip>
                     </TooltipProvider>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => isEditing ? handleSqlSave(messageId) : setEditingSqlId(messageId)}
-                  >
-                    {isEditing ? 'Save' : 'Edit'}
-                  </Button>
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => isEditing ? handleSqlSave(messageId) : setEditingSqlId(messageId)}
+                        >
+                          {isEditing ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>{isEditing ? 'Save' : 'Edit'}</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </div>
               </div>
               {isEditing ? (
@@ -494,16 +512,26 @@ export default function DatabaseQueryApp() {
                   onClick={() => explainSQL(currentSql, messageId)}
                   size="sm"
                   className="bg-blue-600 hover:bg-blue-700 text-white"
+                  disabled={loadingOperation.type === 'explain' && loadingOperation.messageId === messageId}
                 >
-                  <Search className="w-4 h-4 mr-2" />
+                  {loadingOperation.type === 'explain' && loadingOperation.messageId === messageId ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Search className="w-4 h-4 mr-2" />
+                  )}
                   Explain
                 </Button>
                 <Button
                   onClick={() => runSQL(currentSql, messageId)}
                   size="sm"
                   className="bg-green-600 hover:bg-green-700 text-white"
+                  disabled={loadingOperation.type === 'run' && loadingOperation.messageId === messageId}
                 >
-                  <Play className="w-4 h-4 mr-2" />
+                  {loadingOperation.type === 'run' && loadingOperation.messageId === messageId ? (
+                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Play className="w-4 h-4 mr-2" />
+                  )}
                   Run SQL
                 </Button>
                 {isEditing && (
@@ -537,7 +565,7 @@ export default function DatabaseQueryApp() {
     const messageClass = isError
       ? "bg-red-100 text-red-900"
       : message.sender === "user"
-      ? "bg-blue-500 text-white"
+      ? "bg-blue-50 text-gray-800"
       : "bg-gray-100 text-gray-800";
 
     const renderResult = () => {
@@ -621,7 +649,7 @@ export default function DatabaseQueryApp() {
           <Avatar className="w-8 h-8">
             <AvatarFallback
               className={
-                message.sender === "user" ? "bg-blue-300" : "bg-gray-300"
+                message.sender === "user" ? "bg-blue-100" : "bg-gray-300"
               }
             >
               {message.sender === "user" ? (
@@ -780,30 +808,18 @@ export default function DatabaseQueryApp() {
                 </ScrollArea>
               </CardContent>
               <CardContent className="p-4 border-t border-gray-200 bg-gray-50">
-                <div className="flex items-center space-x-2 mb-3">
-                  <Checkbox
-                    id="autorun"
-                    checked={autoRun}
-                    onCheckedChange={(checked) =>
-                      setAutoRun(checked as boolean)
-                    }
-                  />
-                  <label
-                    htmlFor="autorun"
-                    className="text-sm font-medium text-gray-700 select-none"
-                  >
-                    Auto run SQL
-                  </label>
-                </div>
                 <div className="flex space-x-2">
-                  <Input
+                  <Textarea
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
                     placeholder="Type your query..."
-                    onKeyPress={(e) =>
-                      e.key === "Enter" && !e.shiftKey && handleSendMessage()
-                    }
-                    className="flex-1"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSendMessage();
+                      }
+                    }}
+                    className="flex-1 min-h-[60px] max-h-[200px] resize-y"
                     disabled={!selectedConnectionId}
                   />
                   <Button
@@ -811,7 +827,11 @@ export default function DatabaseQueryApp() {
                     disabled={isLoading || !selectedConnectionId}
                     className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
-                    <Send className="w-4 h-4 mr-2" />
+                    {isLoading ? (
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4 mr-2" />
+                    )}
                     Send
                   </Button>
                 </div>
