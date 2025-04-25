@@ -42,7 +42,10 @@ import {
 import { format, parseISO, addHours } from "date-fns";
 import ReactMarkdown from 'react-markdown';
 import { Textarea } from "@/components/ui/textarea";
+import {useChatProviderConfig} from "@/app/context/ChatProviderConfigContext";
+
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
+
 
 interface QueryResult {
   [key: string]: any;
@@ -104,6 +107,7 @@ export default function DatabaseQueryApp() {
   //  different state from send button loading operation, so that support multiple operations at the same time
   const [loadingOperation, setLoadingOperation] = useState<{ type: 'explain' | 'run' | null; messageId: number | null }>({ type: null, messageId: null });
   const conversationsCache = useRef<Map<number, Conversation[]>>(new Map());
+  const { providerConfig } = useChatProviderConfig();
 
   useEffect(() => {
     checkSettings();
@@ -206,6 +210,7 @@ export default function DatabaseQueryApp() {
         },
         body: JSON.stringify({
           query: inputMessage,
+          providerConfig: providerConfig,
           conversationId,
           connectionId: selectedConnectionId
         })

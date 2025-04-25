@@ -5,6 +5,7 @@ import { Theme } from "@radix-ui/themes";
 import "@radix-ui/themes/styles.css";
 import "./globals.css";
 import packageJson from "../package.json";
+import {ChatProviderConfigProvider} from "@/app/context/ChatProviderConfigContext";
 
 export const metadata: Metadata = {
   title: "Query Craft",
@@ -36,7 +37,11 @@ export default function RootLayout({
               </div>
             </div>
           </nav>
-          <div className="main">{children}</div>
+          <div className="main">
+            <ChatProviderConfigProvider>
+              {children}
+            </ChatProviderConfigProvider>
+          </div>
         </Theme>
       </body>
     </html>
