@@ -29,6 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
+import ChatProviderConfig from "@/components/config/ChatProviderConfig";
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 
 interface DatabaseConnection {
@@ -400,6 +401,12 @@ export default function SettingsPage() {
               This prompt guides the AI in generating SQL queries. Be specific
               about the expected output and any constraints.
             </p>
+          </CardContent>
+        </Card>
+        <Card className="mt-6">
+          <CardHeader>Chat Service Configuration</CardHeader>
+          <CardContent>
+            <ChatProviderConfig/>
           </CardContent>
         </Card>
         <div className="grid grid-cols-3 gap-4">
