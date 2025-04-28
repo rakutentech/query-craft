@@ -1,6 +1,9 @@
 // app/api/settings/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getSettings, saveSettings, getDatabaseConnections, saveDatabaseConnection, deleteDatabaseConnection, testDatabaseConnection } from '@/app/lib/db';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/lib/auth';
+
 interface DatabaseConnection {
   id?: number;
   projectName: string;
@@ -15,8 +18,13 @@ interface DatabaseConnection {
 
 export async function GET() {
   try {
-    const settings = await getSettings();
-    const databaseConnections = await getDatabaseConnections();
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
+    const settings = await getSettings(session.user.id);
+    const databaseConnections = await getDatabaseConnections(session.user.id);
     return NextResponse.json({ settings, databaseConnections });
   } catch (error) {
     console.error("Error fetching settings:", error);
@@ -26,6 +34,11 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const data = await request.json();
     const { aiSettings, databaseConnections } = data;
     const invalidConnections = databaseConnections.filter((conn: DatabaseConnection) => {
@@ -40,15 +53,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    console.log(aiSettings);
-
     // Save general settings
-    await saveSettings(aiSettings);
+    await saveSettings({ ...aiSettings, user_id: session.user.id });
 
-    // // Save or update database connections
-    // for (const connection of databaseConnections) {
-    //   await saveDatabaseConnection(connection);
-    // }
+    // Save or update database connections
+    for (const connection of databaseConnections) {
+      await saveDatabaseConnection(connection, session.user.id);
+    }
 
     return NextResponse.json({ message: 'Settings saved successfully' });
   } catch (error) {
@@ -59,8 +70,13 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { id } = await request.json();
-    await deleteDatabaseConnection(id);
+    await deleteDatabaseConnection(id, session.user.id);
     return NextResponse.json({ message: 'Database connection deleted successfully' });
   } catch (error) {
     console.error("Error deleting database connection:", error);
@@ -70,6 +86,11 @@ export async function DELETE(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const connection = await request.json();
     const isValid = await testDatabaseConnection(connection);
     if (isValid) {

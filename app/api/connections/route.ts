@@ -1,9 +1,16 @@
 // app/api/connections/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { testDatabaseConnection, getDatabaseSchema, saveDatabaseConnection, DatabaseConnection } from '@/app/lib/db';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const connection: DatabaseConnection = await request.json();
 
     // Test the connection
@@ -12,22 +19,15 @@ export async function POST(request: NextRequest) {
     // Get the schema
     const schema = await getDatabaseSchema(connection);
 
-    // Save the connection with the schema
-    const connectionWithSchema: DatabaseConnection = {
-      ...connection,
-      schema
-    };
-    await saveDatabaseConnection(connectionWithSchema);
-
     return NextResponse.json(
       { 
-        message: 'Connection tested and saved successfully', 
+        message: 'Connection tested successfully', 
         schema 
       },
       { status: 200 }
     );
   } catch (error) {
-    console.error('Error saving connection:', error);
+    console.error('Error testing connection:', error);
     
     let statusCode = 500;
     let errorMessage = 'An unexpected error occurred';
@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       { 
-        message: 'Failed to save connection', 
+        message: 'Failed to test connection', 
         error: errorMessage 
       },
       { status: statusCode }

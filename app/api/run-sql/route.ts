@@ -1,9 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { executeQuery } from '@/app/lib/db';
 import { FieldPacket, QueryError } from 'mysql2';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { sql, connectionId } = await request.json();
     console.log('Executing SQL:', sql, 'on connection:', connectionId);
 
@@ -14,7 +21,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await executeQuery(sql, connectionId);
+    const result = await executeQuery(sql, connectionId, session.user.id);
     return NextResponse.json({ result });
   } catch (error: unknown) {
     console.error('Error executing SQL query:', error);

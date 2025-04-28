@@ -1,48 +1,51 @@
-import type { Metadata } from "next";
-import Link from "next/link";
+import { Providers } from '@/components/providers';
+import { Theme } from '@radix-ui/themes';
+import { Metadata } from 'next';
+import Link from 'next/link';
 import { inter } from "./fonts";
-import { Theme } from "@radix-ui/themes";
 import "@radix-ui/themes/styles.css";
 import "./globals.css";
 import packageJson from "../package.json";
 import {ChatProviderConfigProvider} from "@/app/context/ChatProviderConfigContext";
 
 export const metadata: Metadata = {
-  title: "Query Craft",
-  description: "Use Natural Language to query database."
+  title: 'QueryCraft',
+  description: 'A powerful database query tool',
 };
 
 export default function RootLayout({
-  children
-}: Readonly<{
+  children,
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en">
       <body className={`${inter.variable} font-sans`}>
-        <Theme>
-          <nav className="bg-gray-800 text-white p-4">
-            <div className="container mx-auto flex justify-between items-center">
-              <span className="text-xl font-bold flex items-center space-x-2">
-                <Link href="/">QueryCraft</Link>
-                <span className="text-sm text-gray-500">V{packageJson.version}</span>
+        <Providers>
+          <Theme>
+            <nav className="bg-gray-800 text-white p-4">
+              <div className="container mx-auto flex justify-between items-center">
+                <span className="text-xl font-bold flex items-center space-x-2">
+                  <Link href="/">QueryCraft</Link>
+                  <span className="text-sm text-gray-500">V{packageJson.version}</span>
               </span>
-              <div className="space-x-4">
-                <Link href="/" className="hover:text-blue-300">
-                  Home
-                </Link>
-                <Link href="/settings" className="hover:text-blue-300">
-                  Settings
-                </Link>
+                <div className="space-x-4">
+                  <Link href="/" className="hover:text-blue-300">
+                    Home
+                  </Link>
+                  <Link href="/settings" className="hover:text-blue-300">
+                    Settings
+                  </Link>
+                </div>
               </div>
-            </div>
-          </nav>
-          <div className="main">
+            </nav>
+            <div className="main">
             <ChatProviderConfigProvider>
               {children}
             </ChatProviderConfigProvider>
           </div>
-        </Theme>
+          </Theme>
+        </Providers>
       </body>
     </html>
   );

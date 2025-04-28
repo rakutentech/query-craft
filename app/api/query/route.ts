@@ -12,12 +12,19 @@ import {Message} from "ollama";
 import {generateOllamaChatResponse} from "@/app/lib/ollama";
 import {generateAzureChatResponse} from "@/app/lib/azure-ai";
 import OpenAI from "openai";
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/lib/auth';
 import {Anthropic} from "@anthropic-ai/sdk";
 import {generateClaudeChatResponse} from "@/app/lib/claude";
 import {generateOpenAIChatResponse} from "@/app/lib/openai";
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { query, providerConfig: providerConfig, conversationId, connectionId } = await request.json();
 
     if (!connectionId) {
@@ -31,7 +38,8 @@ export async function POST(request: NextRequest) {
     if (!currentConversationId) {
       currentConversationId = await createConversation(
         query.substring(0, 20) + "...",
-        connectionId
+        connectionId,
+        session.user.id
       );
     }
 
@@ -44,8 +52,8 @@ export async function POST(request: NextRequest) {
     );
 
     // Get settings and database connections
-    const settings = await getSettings();
-    const connections = await getDatabaseConnections();
+    const settings = await getSettings(session.user.id);
+    const connections = await getDatabaseConnections(session.user.id);
     const currentConnection = connections.find(conn => conn.id === connectionId);
 
     if (!currentConnection) {

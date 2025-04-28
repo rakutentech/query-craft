@@ -42,6 +42,8 @@ import {
 import { format, parseISO, addHours } from "date-fns";
 import ReactMarkdown from 'react-markdown';
 import { Textarea } from "@/components/ui/textarea";
+import { useSession, signIn, signOut } from 'next-auth/react';
+import { UnauthorizedAccess } from "@/components/UnauthorizedAccess";
 import {useChatProviderConfig} from "@/app/context/ChatProviderConfigContext";
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
@@ -82,6 +84,7 @@ interface Conversation {
 
 
 export default function DatabaseQueryApp() {
+  const { data: session, status } = useSession();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<Conversation[]>([]); 
   const [messages, setMessages] = useState<Message[]>([]);
@@ -107,11 +110,13 @@ export default function DatabaseQueryApp() {
   //  different state from send button loading operation, so that support multiple operations at the same time
   const [loadingOperation, setLoadingOperation] = useState<{ type: 'explain' | 'run' | null; messageId: number | null }>({ type: null, messageId: null });
   const conversationsCache = useRef<Map<number, Conversation[]>>(new Map());
+  const [showAuth, setShowAuth] = useState(false);
   const { providerConfig } = useChatProviderConfig();
 
   useEffect(() => {
     checkSettings();
     fetchDatabaseConnections();
+    setShowAuth(process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -687,27 +692,79 @@ export default function DatabaseQueryApp() {
     );
   };
 
+  if (status === "loading") {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return <UnauthorizedAccess />;
+  }
+
   return (
     <div className="bg-gray-100 min-h-screen">
       <div className="container mx-auto py-6 px-4">
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-800">QueryCraft Chat</h1>
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
+          <div className="flex items-center space-x-4">
+            {showAuth && (
+              session ? (
+                <div className="flex items-center space-x-2">
+                  <Avatar className="w-8 h-8">
+                    {session.user?.image ? (
+                      <img
+                        src={session.user.image}
+                        alt={session.user?.name || 'User avatar'}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <AvatarFallback>
+                        {session.user?.name?.charAt(0) || 'U'}
+                      </AvatarFallback>
+                    )}
+                  </Avatar>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">{session.user?.name}</span>
+                    <span className="text-xs text-gray-500">{session.user?.email}</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => signOut()}
+                  >
+                    Sign Out
+                  </Button>
+                </div>
+              ) : (
                 <Button
                   variant="outline"
-                  size="icon"
-                  onClick={() => setShowAbout(!showAbout)}
+                  size="sm"
+                  onClick={() => signIn('github')}
                 >
-                  <Info className="h-4 w-4" />
+                  Sign In
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>About QueryCraft</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+              )
+            )}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={() => setShowAbout(!showAbout)}
+                  >
+                    <Info className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>About QueryCraft</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          </div>
         </div>
 
         {showAbout && (

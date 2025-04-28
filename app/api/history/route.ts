@@ -1,9 +1,16 @@
 // app/api/history/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { addToHistory, getHistory } from '@/app/lib/db';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { connectionId, query, sql } = await request.json();
 
     if (!connectionId || !query || !sql) {
@@ -13,7 +20,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await addToHistory(connectionId, query, sql);
+    await addToHistory(connectionId, query, sql, session.user.id);
 
     return NextResponse.json(
       { message: 'History saved successfully' },
@@ -31,6 +38,11 @@ export async function POST(request: NextRequest) {
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const { searchParams } = new URL(request.url);
     const connectionId = searchParams.get('connectionId');
 
@@ -41,7 +53,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const history = await getHistory(parseInt(connectionId, 10));
+    const history = await getHistory(parseInt(connectionId, 10), session.user.id);
 
     return NextResponse.json(history, { status: 200 });
   } catch (error) {
