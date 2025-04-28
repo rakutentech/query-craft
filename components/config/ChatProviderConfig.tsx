@@ -1,14 +1,61 @@
 'use client';
 
-import React, {useState} from "react";
-import {useChatProviderConfig} from "@/app/context/ChatProviderConfigContext";
+import React, {useContext, useEffect, useState} from "react";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
 import {CardContent} from "@/components/ui/card";
+import {Button} from "@/components/ui/button";
+import {Loader2} from "lucide-react";
+import {
+    useChatProviderConfig
+} from "@/app/context/ChatProviderConfigContext";
 
 function ChatProviderConfig() {
     const { providerConfig, setProviderConfig } = useChatProviderConfig();
     const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
+    const [testResult, setTestResult] = useState<string | null>(null);
+    const [isTesting, setIsTesting] = useState(false);
+    const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+
+
+    // Load cached configuration on component mount
+    useEffect(() => {
+        const cachedConfig = localStorage.getItem("chatProviderConfig");
+        if (cachedConfig) {
+            setProviderConfig(JSON.parse(cachedConfig));
+        }
+
+        const cachedModels = localStorage.getItem("ollamaModels");
+        if (cachedModels) {
+            setOllamaModels(JSON.parse(cachedModels));
+        }
+    }, [setProviderConfig]);
+
+    const fetchOllamaModels = async () => {
+        try {
+            const endpoint = providerConfig.config.ollama.endpoint;
+            if (!endpoint) {
+                setFormErrors((prev) => ({
+                    ...prev,
+                    "ollama-endpoint": "Ollama endpoint is required to fetch models.",
+                }));
+                return;
+            }
+
+            const res = await fetch(`/api/provider/ollama?endpoint=${encodeURIComponent(endpoint)}`);
+            if (!res.ok) {
+                throw new Error("Failed to fetch Ollama models.");
+            }
+
+            const data = await res.json();
+            console.log("Fetched Ollama models:", data.models)
+            setOllamaModels(data.models || []);
+            localStorage.setItem("ollamaModels", JSON.stringify(data.models || [])); // Cache models
+        } catch (error) {
+            console.error("Error fetching Ollama models:", error);
+            setOllamaModels([]);
+        }
+    };
 
     const RequiredLabel = ({ htmlFor, children }: { htmlFor: string, children: React.ReactNode }) => (
         <Label htmlFor={htmlFor} className="flex items-center">
@@ -17,7 +64,7 @@ function ChatProviderConfig() {
     );
 
     const handleProviderChange = (provider: "Azure OpenAI" | "Ollama" | "Claude" | "OpenAI") => {
-        setProviderConfig((prevConfig) => {
+        setProviderConfig(( prevConfig) => {
             const updatedConfig = { ...prevConfig, selectedProvider: provider };
 
             if (provider === "Ollama") {
@@ -59,6 +106,91 @@ function ChatProviderConfig() {
                 },
             },
         }));
+    };
+
+    const testConnection = async () => {
+        setIsTesting(true);
+        setTestResult(null);
+
+        try {
+            const { selectedProvider, config } = providerConfig;
+
+            let response;
+            if (selectedProvider === "Azure OpenAI") {
+                const res = await fetch('/api/provider/azure', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        azureOpenAIConfig: config.azure,
+                        messages: [{ role: "user", content: "Test message" }],
+                    }),
+                });
+                if (res.status !== 200) {
+                    setTestResult("Connection failed. Please check your configuration.");
+                    return;
+                }
+                const data = await res.json();
+                response = data.response;
+            } else if (selectedProvider === "Claude") {
+                const res = await fetch('/api/provider/claude', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        claudeConfig: config.claude,
+                        systemPrompt: "Test system prompt",
+                        messages: [{ role: "user", content: "Test message" }],
+                    }),
+                });
+                if (res.status !== 200) {
+                    setTestResult("Connection failed. Please check your configuration.");
+                    return;
+                }
+                const data = await res.json();
+                response = data.response;
+            } else if (selectedProvider === "Ollama") {
+                const res = await fetch('/api/provider/ollama', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        ollamaConfig: config.ollama,
+                        messages: [{ role: "user", content: "Test message" }],
+                    }),
+                });
+                if (res.status !== 200) {
+                    setTestResult("Connection failed. Please check your configuration.");
+                    return;
+                }
+                const data = await res.json();
+                response = data.response;
+            } else if (selectedProvider === "OpenAI") {
+                const res = await fetch('/api/provider/openai', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        openaiConfig: config.openai,
+                        messages: [{ role: "user", content: "Test message" }],
+                    }),
+                });
+                if (res.status !== 200) {
+                    setTestResult("Connection failed. Please check your configuration.");
+                    return;
+                }
+                const data = await res.json();
+                response = data.response;
+            } else {
+                throw new Error("Testing is not supported for the selected provider.");
+            }
+
+            setTestResult(`Connection successful: ${response}`);
+
+            // Cache the configuration in localStorage
+            localStorage.setItem("chatProviderConfig", JSON.stringify(providerConfig));
+        } catch (error) {
+            console.error("Test connection failed:", error);
+            setTestResult("Connection failed. Please check your configuration.");
+        } finally {
+            setIsTesting(false);
+        }
     };
 
     return (
@@ -157,55 +289,109 @@ function ChatProviderConfig() {
                             </select>
                         </div>
 
-                        <div>
-                            <RequiredLabel htmlFor="ollama-endpoint">Endpoint</RequiredLabel>
-                            <Input
-                                id="ollama-endpoint"
-                                value={providerConfig.config.ollama.endpoint || ""}
-                                onChange={(e) => handleInputChange("ollama", "endpoint", e.target.value)}
-                                placeholder="Enter Ollama Endpoint"
-                                required
-                            />
-                            {formErrors["ollama-endpoint"] && (
-                                <p className="text-red-500 text-sm mt-1">
-                                    {formErrors["ollama-endpoint"]}
-                                </p>
-                            )}
-                        </div>
+                        {providerConfig.config.ollama.type === "Local" && (
+                            <>
+                                <div>
+                                    <RequiredLabel htmlFor="ollama-endpoint">Endpoint</RequiredLabel>
+                                    <Input
+                                        id="ollama-endpoint"
+                                        value={providerConfig.config.ollama.endpoint || "http://localhost:11434"}
+                                        onChange={(e) => handleInputChange("ollama", "endpoint", e.target.value)}
+                                        onBlur={() => {
+                                            if (
+                                                providerConfig.selectedProvider === "Ollama" &&
+                                                providerConfig.config.ollama.type === "Local" &&
+                                                providerConfig.config.ollama.endpoint
+                                            ) {
+                                                fetchOllamaModels();
+                                            }
+                                        }}
+                                        placeholder="Enter Ollama Endpoint"
+                                        required
+                                    />
+                                    {formErrors["ollama-endpoint"] && (
+                                        <p className="text-red-500 text-sm mt-1">
+                                            {formErrors["ollama-endpoint"]}
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
+                                    <RequiredLabel htmlFor="ollama-model">Ollama Model</RequiredLabel>
+                                    <select
+                                        id="ollama-model"
+                                        value={providerConfig.config.ollama.model || ""}
+                                        onChange={(e) => handleInputChange("ollama", "model", e.target.value)}
+                                        required
+                                    >
+                                        <option value="" disabled>
+                                            Select a model
+                                        </option>
+                                        {ollamaModels.map((model) => (
+                                            <option key={model} value={model}>
+                                                {model}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    {formErrors["ollama-model"] && (
+                                        <p className="text-red-500 text-sm mt-1">
+                                            {formErrors["ollama-model"]}
+                                        </p>
+                                    )}
+                                </div>
+                            </>
 
-                        {providerConfig.config.ollama.type === "Remote" && (
-                            <div>
-                                <RequiredLabel htmlFor="ollama-api-key">API Key</RequiredLabel>
-                                <Input
-                                    id="ollama-api-key"
-                                    value={providerConfig.config.ollama.apiKey || ""}
-                                    onChange={(e) => handleInputChange("ollama", "apiKey", e.target.value)}
-                                    placeholder="Enter Ollama API Key"
-                                    required
-                                />
-                                {formErrors["ollama-api-key"] && (
-                                    <p className="text-red-500 text-sm mt-1">
-                                        {formErrors["ollama-api-key"]}
-                                    </p>
-                                )}
-                            </div>
                         )}
 
-                        <div>
-                            <RequiredLabel htmlFor="ollama-model">Ollama Model</RequiredLabel>
-                            <Input
-                                id="ollama-model"
-                                value={providerConfig.config.ollama.model || ""}
-                                onChange={(e) => handleInputChange("ollama", "model", e.target.value)}
-                                placeholder="Enter Ollama Model"
-                                required
-                            />
-                            {formErrors["ollama-model"] && (
-                                <p className="text-red-500 text-sm mt-1">
-                                    {formErrors["ollama-model"]}
-                                </p>
-                            )}
-                        </div>
+                        {providerConfig.config.ollama.type === "Remote" && (
+                            <>
+                                <div>
+                                    <RequiredLabel htmlFor="ollama-endpoint">Endpoint</RequiredLabel>
+                                    <Input
+                                        id="ollama-endpoint"
+                                        value={providerConfig.config.ollama.endpoint || ""}
+                                        onChange={(e) => handleInputChange("ollama", "endpoint", e.target.value)}
+                                        placeholder="Enter Ollama Endpoint"
+                                        required
+                                    />
+                                    {formErrors["ollama-endpoint"] && (
+                                        <p className="text-red-500 text-sm mt-1">
+                                            {formErrors["ollama-endpoint"]}
+                                        </p>
+                                    )}
+                                </div>
+                                <div>
+                                    <RequiredLabel htmlFor="ollama-api-key">API Key</RequiredLabel>
+                                    <Input
+                                        id="ollama-api-key"
+                                        value={providerConfig.config.ollama.apiKey || ""}
+                                        onChange={(e) => handleInputChange("ollama", "apiKey", e.target.value)}
+                                        placeholder="Enter Ollama API Key"
+                                        required
+                                    />
+                                    {formErrors["ollama-api-key"] && (
+                                        <p className="text-red-500 text-sm mt-1">
+                                            {formErrors["ollama-api-key"]}
+                                        </p>
+                                    )}
+                                </div>
+
+                                <div>
+                                    <RequiredLabel htmlFor="ollama-model">Ollama Model</RequiredLabel>
+                                    <Input
+                                        id="ollama-model"
+                                        value={providerConfig.config.ollama.model || ""}
+                                        onChange={(e) => handleInputChange("ollama", "model", e.target.value)}
+                                        placeholder="Enter Ollama Model"
+                                        required
+                                    />
+                                    {formErrors["ollama-model"] && (
+                                        <p className="text-red-500 text-sm mt-1">
+                                            {formErrors["ollama-model"]}
+                                        </p>
+                                    )}
+                                </div>
+                            </>
+                        )}
                     </CardContent>
                 )}
 
@@ -318,6 +504,28 @@ function ChatProviderConfig() {
                         </div>
                     </CardContent>
                 )}
+
+                <div className="mt-4">
+                    <Button
+                        onClick={testConnection}
+                        disabled={isTesting}
+                        className="mt-4"
+                    >
+                        {isTesting ? (
+                            <>
+                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                Testing...
+                            </>
+                        ) : (
+                            "Test Connection"
+                        )}
+                    </Button>
+                    {testResult && (
+                        <p className={`mt-2 ${testResult.includes("successful") ? "text-green-500" : "text-red-500"}`}>
+                            {testResult}
+                        </p>
+                    )}
+                </div>
             </CardContent>
         </div>
     )

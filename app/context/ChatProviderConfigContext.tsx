@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, {createContext, useContext, useState, ReactNode, useMemo, useEffect} from "react";
 
 type ProviderConfig = {
     selectedProvider: "Azure OpenAI" | "Ollama" | "Claude" | "OpenAI";
@@ -38,36 +38,19 @@ type ChatProviderConfigContextType = {
 const ChatProviderConfigContext = createContext<ChatProviderConfigContextType | undefined>(undefined);
 
 export const ChatProviderConfigProvider = ({ children }: { children: ReactNode }) => {
-    const [providerConfig, setProviderConfig] = useState<ProviderConfig>({
-        selectedProvider: "Azure OpenAI",
-        config: {
-            azure: {
-                endpoint: "",
-                apiKey: "",
-                model: "",
-                apiVersion: "",
-            },
-            ollama: {
-                type: "",
-                endpoint: "",
-                apiKey: "",
-                model: "",
-            },
-            claude: {
-                endpoint: "",
-                apiKey: "",
-                model: "",
-            },
-            openai: {
-                endpoint: "",
-                apiKey: "",
-                model: "",
-            },
-        },
+    const [providerConfig, setProviderConfig] = useState<ProviderConfig>(() => {
+        // Load from localStorage on initialization
+        const savedConfig = localStorage.getItem("chatProviderConfig");
+        return savedConfig ? JSON.parse(savedConfig) : { selectedProvider: "", config: {} };
     });
 
+    useEffect(() => {
+        // Persist to localStorage whenever providerConfig changes
+        localStorage.setItem("chatProviderConfig", JSON.stringify(providerConfig));
+    }, [providerConfig]);
+
     return (
-        <ChatProviderConfigContext.Provider value={{ providerConfig: providerConfig, setProviderConfig: setProviderConfig }}>
+        <ChatProviderConfigContext.Provider value={{ providerConfig, setProviderConfig }}>
             {children}
         </ChatProviderConfigContext.Provider>
     );
