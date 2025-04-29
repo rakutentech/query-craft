@@ -46,6 +46,7 @@ NEXT_PUBLIC_BASE_PATH=
 # Database Configuration (Optional - defaults to SQLite)
 ENABLE_MYSQL=true # Set to 'true' to use MySQL instead of SQLite
 DB_HOST=your_mysql_host
+DB_PORT=your_mysql_port
 DB_USER=your_mysql_user
 DB_PASSWORD=your_mysql_password
 DB_NAME=your_database_name
