@@ -30,6 +30,8 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import ChatProviderConfig from "@/components/config/ChatProviderConfig";
+import {useChatProviderConfig} from "@/app/context/ChatProviderConfigContext";
+import Cookies from "js-cookie";
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 
 interface DatabaseConnection {
@@ -116,6 +118,8 @@ export default function SettingsPage() {
     null
   );
   const router = useRouter();
+  const { providerConfig } = useChatProviderConfig(); // Access providerConfig
+
 
   useEffect(() => {
     fetchSettings();
@@ -307,6 +311,15 @@ export default function SettingsPage() {
           return;
         }
       }
+
+      // Save configuration to cookies
+      const encodedConfig = encodeURIComponent(JSON.stringify(providerConfig));
+      Cookies.set("chatProviderConfig", encodedConfig, {
+        path: "/",
+        expires: 1 / 24, // 1 hour
+        secure: true,
+        sameSite: "strict",
+      });
 
       // Save all settings if all tests pass
       const response = await fetch(`${BASE_PATH}/api/settings`, {

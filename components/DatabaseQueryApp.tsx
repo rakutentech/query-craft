@@ -680,8 +680,8 @@ export default function DatabaseQueryApp() {
                   <Image
                       src={imagePath} // Path to your custom icon in the public folder
                       alt={`${providerConfig.selectedProvider} Icon`}
-                      width={32} // Adjust the width as needed
-                      height={32} // Adjust the height as needed
+                      width={20} // Adjust the width as needed
+                      height={20} // Adjust the height as needed
                   />
               )}
             </AvatarFallback>

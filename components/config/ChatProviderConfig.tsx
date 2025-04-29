@@ -1,39 +1,81 @@
 'use client';
 
-import React, {useContext, useEffect, useState} from "react";
+import React, {useEffect, useState} from "react";
 import {Input} from "@/components/ui/input";
 import {Label} from "@/components/ui/label";
 import {CardContent} from "@/components/ui/card";
 import {Button} from "@/components/ui/button";
 import {Loader2} from "lucide-react";
-import {
-    useChatProviderConfig
-} from "@/app/context/ChatProviderConfigContext";
+import {useChatProviderConfig} from "@/app/context/ChatProviderConfigContext";
+import Cookies from "js-cookie";
 
 function ChatProviderConfig() {
     const { providerConfig, setProviderConfig } = useChatProviderConfig();
+
     const [formErrors, setFormErrors] = useState<{ [key: string]: string }>({});
     const [testResult, setTestResult] = useState<string | null>(null);
     const [isTesting, setIsTesting] = useState(false);
     const [ollamaModels, setOllamaModels] = useState<string[]>([]);
 
+    const getChatProviderConfigFromCookie = (): any | null => {
+        const cookieValue = Cookies.get("chatProviderConfig");
+        if (cookieValue) {
+            try {
+                const decodedValue = decodeURIComponent(cookieValue);
+                return JSON.parse(decodedValue);
+            } catch (error) {
+                console.error("Failed to parse chatProviderConfig cookie:", error);
+                return null;
+            }
+        }
+        return null;
+    };
 
-    // Load cached configuration on component mount
+    const getOllamaModelsFromCookie = (): any | null => {
+        const cookieValue = Cookies.get("ollamaModels");
+        if (cookieValue) {
+            try {
+                return decodeURIComponent(cookieValue);
+            } catch (error) {
+                console.error("Failed to parse ollamaModels cookie:", error);
+                return null;
+            }
+        }
+        return null;
+    };
+
+    // Load cached configuration and models from cookies on component mount
     useEffect(() => {
-        const cachedConfig = localStorage.getItem("chatProviderConfig");
-        if (cachedConfig) {
-            setProviderConfig(JSON.parse(cachedConfig));
-        }
+        const loadFromCookies = async () => {
+            const chatProviderConfigCookie = getChatProviderConfigFromCookie();
+            const ollamaModelsCookie = getOllamaModelsFromCookie();
 
-        const cachedModels = localStorage.getItem("ollamaModels");
-        if (cachedModels) {
-            setOllamaModels(JSON.parse(cachedModels));
-        }
-    }, [setProviderConfig]);
+            if (chatProviderConfigCookie) {
+                setProviderConfig(chatProviderConfigCookie)
+            }
+            if (ollamaModelsCookie) {
+                setOllamaModels(ollamaModelsCookie.split(','))
+            }
+
+            // Fetch local Ollama models if the provider is Ollama and type is Local
+            if (
+                chatProviderConfigCookie?.selectedProvider === "Ollama" &&
+                chatProviderConfigCookie?.config?.ollama?.type === "Local"
+            ) {
+                await fetchOllamaModels();
+            }
+        };
+
+        loadFromCookies();
+    }, [setProviderConfig, setOllamaModels]);
+
+    useEffect(() => {
+        fetchOllamaModels()
+    }, []);
 
     const fetchOllamaModels = async () => {
         try {
-            const endpoint = providerConfig.config.ollama.endpoint;
+            const endpoint = providerConfig.config.ollama?.endpoint;
             if (!endpoint) {
                 setFormErrors((prev) => ({
                     ...prev,
@@ -50,7 +92,15 @@ function ChatProviderConfig() {
             const data = await res.json();
             console.log("Fetched Ollama models:", data.models)
             setOllamaModels(data.models || []);
-            localStorage.setItem("ollamaModels", JSON.stringify(data.models || [])); // Cache models
+
+            // Save models to cookies
+            const encodedModels = encodeURIComponent(data.models || []);
+            Cookies.set("ollamaModels", encodedModels, {
+                path: "/",
+                expires: 1 / 24, // 1 hour
+                secure: true,
+                sameSite: "strict",
+            });
         } catch (error) {
             console.error("Error fetching Ollama models:", error);
             setOllamaModels([]);
@@ -71,8 +121,8 @@ function ChatProviderConfig() {
                 updatedConfig.config.ollama = {
                     ...prevConfig.config.ollama,
                     type: "Local", // Default type
-                    endpoint: "http://localhost:11434", // Default local endpoint
-                    model: prevConfig.config.ollama.model || "", // Retain model if already set
+                    endpoint: prevConfig.config.ollama?.endpoint || "http://localhost:11434", // Default local endpoint
+                    model: prevConfig.config.ollama?.model || "", // Retain model if already set
                 };
             }
 
@@ -182,9 +232,6 @@ function ChatProviderConfig() {
             }
 
             setTestResult(`Connection successful: ${response}`);
-
-            // Cache the configuration in localStorage
-            localStorage.setItem("chatProviderConfig", JSON.stringify(providerConfig));
         } catch (error) {
             console.error("Test connection failed:", error);
             setTestResult("Connection failed. Please check your configuration.");
@@ -209,70 +256,71 @@ function ChatProviderConfig() {
                         <option value="OpenAI">OpenAI</option>
                     </select>
                 </div>
+            </CardContent>
 
                 {providerConfig.selectedProvider === "Azure OpenAI" && (
-                    <CardContent className="space-y-4">
-                        <div>
-                            <RequiredLabel htmlFor="azure-endpoint">Endpoint</RequiredLabel>
-                            <Input
-                                id="azure-endpoint"
-                                value={providerConfig.config.azure.endpoint}
-                                onChange={(e) => handleInputChange("azure", "endpoint", e.target.value)}
-                                placeholder="Enter Azure OpenAI Endpoint"
-                                required
-                            />
-                            {formErrors["azure-endpoint"] && (
-                                <p className="text-red-500 text-sm mt-1">
-                                    {formErrors["azure-endpoint"]}
-                                </p>
-                            )}
-                        </div>
-                        <div>
-                            <RequiredLabel htmlFor="azure-api-key">API Key</RequiredLabel>
-                            <Input
-                                id="azure-api-key"
-                                value={providerConfig.config.azure.apiKey}
-                                onChange={(e) => handleInputChange("azure", "apiKey", e.target.value)}
-                                placeholder="Enter Azure OpenAI API Key"
-                                required
-                            />
-                            {formErrors["azure-api-key"] && (
-                                <p className="text-red-500 text-sm mt-1">
-                                    {formErrors["azure-api-key"]}
-                                </p>
-                            )}
-                        </div>
-                        <div>
-                            <RequiredLabel htmlFor="azure-deployment-id">Deployment ID</RequiredLabel>
-                            <Input
-                                id="azure-deployment-id"
-                                value={providerConfig.config.azure.model}
-                                onChange={(e) => handleInputChange("azure", "model", e.target.value)}
-                                placeholder="Enter Azure OpenAI Deployment ID"
-                                required
-                            />
-                            {formErrors["azure-deployment-id"] && (
-                                <p className="text-red-500 text-sm mt-1">
-                                    {formErrors["azure-deployment-id"]}
-                                </p>
-                            )}
-                        </div>
-                        <div>
-                            <RequiredLabel htmlFor="azure-api-version">API Version</RequiredLabel>
-                            <Input
-                                id="azure-api-version"
-                                value={providerConfig.config.azure.apiVersion}
-                                onChange={(e) => handleInputChange("azure", "apiVersion", e.target.value)}
-                                placeholder="Enter Azure OpenAI API Version"
-                                required
-                            />
-                            {formErrors["azure-api-version"] && (
-                                <p className="text-red-500 text-sm mt-1">
-                                    {formErrors["azure-api-version"]}
-                                </p>
-                            )}
-                        </div>
-                    </CardContent>
+                        <CardContent className="space-y-4">
+                            <div>
+                                <RequiredLabel htmlFor="azure-endpoint">Endpoint</RequiredLabel>
+                                <Input
+                                    id="azure-endpoint"
+                                    value={providerConfig.config.azure?.endpoint}
+                                    onChange={(e) => handleInputChange("azure", "endpoint", e.target.value)}
+                                    placeholder="Enter Azure OpenAI Endpoint"
+                                    required
+                                />
+                                {formErrors["azure-endpoint"] && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        {formErrors["azure-endpoint"]}
+                                    </p>
+                                )}
+                            </div>
+                            <div>
+                                <RequiredLabel htmlFor="azure-api-key">API Key</RequiredLabel>
+                                <Input
+                                    id="azure-api-key"
+                                    value={providerConfig.config.azure?.apiKey}
+                                    onChange={(e) => handleInputChange("azure", "apiKey", e.target.value)}
+                                    placeholder="Enter Azure OpenAI API Key"
+                                    required
+                                />
+                                {formErrors["azure-api-key"] && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        {formErrors["azure-api-key"]}
+                                    </p>
+                                )}
+                            </div>
+                            <div>
+                                <RequiredLabel htmlFor="azure-deployment-id">Deployment ID</RequiredLabel>
+                                <Input
+                                    id="azure-deployment-id"
+                                    value={providerConfig.config.azure?.model}
+                                    onChange={(e) => handleInputChange("azure", "model", e.target.value)}
+                                    placeholder="Enter Azure OpenAI Deployment ID"
+                                    required
+                                />
+                                {formErrors["azure-deployment-id"] && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        {formErrors["azure-deployment-id"]}
+                                    </p>
+                                )}
+                            </div>
+                            <div>
+                                <RequiredLabel htmlFor="azure-api-version">API Version</RequiredLabel>
+                                <Input
+                                    id="azure-api-version"
+                                    value={providerConfig.config.azure?.apiVersion}
+                                    onChange={(e) => handleInputChange("azure", "apiVersion", e.target.value)}
+                                    placeholder="Enter Azure OpenAI API Version"
+                                    required
+                                />
+                                {formErrors["azure-api-version"] && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        {formErrors["azure-api-version"]}
+                                    </p>
+                                )}
+                            </div>
+                        </CardContent>
                 )}
 
                 {providerConfig.selectedProvider === "Ollama" && (
@@ -281,7 +329,7 @@ function ChatProviderConfig() {
                             <label htmlFor="ollama-type">Ollama Type:</label>
                             <select
                                 id="ollama-type"
-                                value={providerConfig.config.ollama.type || "Local"}
+                                value={providerConfig.config.ollama?.type || "Local"}
                                 onChange={(e) => handleOllamaTypeChange(e.target.value as "Local" | "Remote")}
                             >
                                 <option value="Local">Local</option>
@@ -289,19 +337,19 @@ function ChatProviderConfig() {
                             </select>
                         </div>
 
-                        {providerConfig.config.ollama.type === "Local" && (
+                        {providerConfig.config.ollama?.type === "Local" && (
                             <>
                                 <div>
                                     <RequiredLabel htmlFor="ollama-endpoint">Endpoint</RequiredLabel>
                                     <Input
                                         id="ollama-endpoint"
-                                        value={providerConfig.config.ollama.endpoint || "http://localhost:11434"}
+                                        value={providerConfig.config.ollama?.endpoint || "http://localhost:11434"}
                                         onChange={(e) => handleInputChange("ollama", "endpoint", e.target.value)}
                                         onBlur={() => {
                                             if (
                                                 providerConfig.selectedProvider === "Ollama" &&
-                                                providerConfig.config.ollama.type === "Local" &&
-                                                providerConfig.config.ollama.endpoint
+                                                providerConfig.config.ollama?.type === "Local" &&
+                                                providerConfig.config.ollama?.endpoint
                                             ) {
                                                 fetchOllamaModels();
                                             }
@@ -319,7 +367,7 @@ function ChatProviderConfig() {
                                     <RequiredLabel htmlFor="ollama-model">Ollama Model</RequiredLabel>
                                     <select
                                         id="ollama-model"
-                                        value={providerConfig.config.ollama.model || ""}
+                                        value={providerConfig.config.ollama?.model || ""}
                                         onChange={(e) => handleInputChange("ollama", "model", e.target.value)}
                                         required
                                     >
@@ -342,13 +390,13 @@ function ChatProviderConfig() {
 
                         )}
 
-                        {providerConfig.config.ollama.type === "Remote" && (
+                        {providerConfig.config.ollama?.type === "Remote" && (
                             <>
                                 <div>
                                     <RequiredLabel htmlFor="ollama-endpoint">Endpoint</RequiredLabel>
                                     <Input
                                         id="ollama-endpoint"
-                                        value={providerConfig.config.ollama.endpoint || ""}
+                                        value={providerConfig.config.ollama?.endpoint || ""}
                                         onChange={(e) => handleInputChange("ollama", "endpoint", e.target.value)}
                                         placeholder="Enter Ollama Endpoint"
                                         required
@@ -363,7 +411,7 @@ function ChatProviderConfig() {
                                     <RequiredLabel htmlFor="ollama-api-key">API Key</RequiredLabel>
                                     <Input
                                         id="ollama-api-key"
-                                        value={providerConfig.config.ollama.apiKey || ""}
+                                        value={providerConfig.config.ollama?.apiKey || ""}
                                         onChange={(e) => handleInputChange("ollama", "apiKey", e.target.value)}
                                         placeholder="Enter Ollama API Key"
                                         required
@@ -379,7 +427,7 @@ function ChatProviderConfig() {
                                     <RequiredLabel htmlFor="ollama-model">Ollama Model</RequiredLabel>
                                     <Input
                                         id="ollama-model"
-                                        value={providerConfig.config.ollama.model || ""}
+                                        value={providerConfig.config.ollama?.model || ""}
                                         onChange={(e) => handleInputChange("ollama", "model", e.target.value)}
                                         placeholder="Enter Ollama Model"
                                         required
@@ -401,7 +449,7 @@ function ChatProviderConfig() {
                             <RequiredLabel htmlFor="claude-endpoint">Endpoint</RequiredLabel>
                             <Input
                                 id="claude-endpoint"
-                                value={providerConfig.config.claude.endpoint}
+                                value={providerConfig.config.claude?.endpoint}
                                 onChange={(e) => handleInputChange("claude", "endpoint", e.target.value)}
                                 placeholder="Enter Claude API Endpoint"
                                 required
@@ -416,7 +464,7 @@ function ChatProviderConfig() {
                             <RequiredLabel htmlFor="claude-api-key">API Key</RequiredLabel>
                             <Input
                                 id="claude-api-key"
-                                value={providerConfig.config.claude.apiKey}
+                                value={providerConfig.config.claude?.apiKey}
                                 onChange={(e) => handleInputChange("claude", "apiKey", e.target.value)}
                                 placeholder="Enter Claude API Key"
                                 required
@@ -431,7 +479,7 @@ function ChatProviderConfig() {
                             <RequiredLabel htmlFor="claude-model">Model</RequiredLabel>
                             <Input
                                 id="claude-model"
-                                value={providerConfig.config.claude.model}
+                                value={providerConfig.config.claude?.model}
                                 onChange={(e) => handleInputChange("claude", "model", e.target.value)}
                                 placeholder="Enter Claude Model"
                                 required
@@ -456,7 +504,7 @@ function ChatProviderConfig() {
                             <RequiredLabel htmlFor="openai-endpoint">Endpoint</RequiredLabel>
                             <Input
                                 id="openai-endpoint"
-                                value={providerConfig.config.openai.endpoint}
+                                value={providerConfig.config.openai?.endpoint}
                                 onChange={(e) => handleInputChange("openai", "endpoint", e.target.value)}
                                 placeholder="Enter OpenAI Endpoint"
                                 required
@@ -471,7 +519,7 @@ function ChatProviderConfig() {
                             <RequiredLabel htmlFor="openai-api-key">API Key</RequiredLabel>
                             <Input
                                 id="openai-api-key"
-                                value={providerConfig.config.openai.apiKey}
+                                value={providerConfig.config.openai?.apiKey}
                                 onChange={(e) => handleInputChange("openai", "apiKey", e.target.value)}
                                 placeholder="Enter OpenAI API Key"
                                 required
@@ -486,7 +534,7 @@ function ChatProviderConfig() {
                             <RequiredLabel htmlFor="openai-model">Model</RequiredLabel>
                             <Input
                                 id="openai-model"
-                                value={providerConfig.config.openai.model}
+                                value={providerConfig.config.openai?.model}
                                 onChange={(e) => handleInputChange("openai", "model", e.target.value)}
                                 placeholder="Enter OpenAI Model"
                                 required
@@ -526,7 +574,6 @@ function ChatProviderConfig() {
                         </p>
                     )}
                 </div>
-            </CardContent>
         </div>
     )
         ;
