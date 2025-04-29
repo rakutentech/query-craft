@@ -24,7 +24,7 @@ A powerful database query tool that supports natural language to SQL conversion.
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-org/query-craft.git
+git clone git@github.com:rakutentech/query-craft.git 
 cd query-craft
 ```
 
@@ -40,8 +40,11 @@ cp .env.template .env
 
 4. Configure environment variables:
 ```env
+# Application Configuration
+NEXT_PUBLIC_BASE_PATH=
+
 # Database Configuration (Optional - defaults to SQLite)
-DB_TYPE=mysql  # Set to 'mysql' to use MySQL instead of SQLite
+ENABLE_MYSQL=true # Set to 'true' to use MySQL instead of SQLite
 DB_HOST=your_mysql_host
 DB_USER=your_mysql_user
 DB_PASSWORD=your_mysql_password
@@ -52,11 +55,15 @@ NEXT_PUBLIC_ENABLE_OAUTH=false  # Set to true to enable GitHub authentication
 GITHUB_ID=your_github_client_id
 GITHUB_SECRET=your_github_client_secret
 GITHUB_ENTERPRISE_URL=your_github_enterprise_url
-NEXTAUTH_URL=http://localhost:3000
+NEXTAUTH_URL=your_app_base_url
 NEXTAUTH_SECRET=your_nextauth_secret
 
-# Application Configuration
-NEXT_PUBLIC_BASE_PATH=/
+# Azure OpenAI Configuration
+AZURE_OPENAI_API_KEY=your_azure_openai_api_key
+AZURE_OPENAI_API_BASE=your_azure_openai_api_base
+AZURE_OPENAI_API_VERSION=your_azure_openai_api_version
+AZURE_OPENAI_API_DEPLOYMENT=your_azure_openai_api_deployment
+PROXY_URL=proxy_of_azure_openai
 ```
 
 5. Set up the database:

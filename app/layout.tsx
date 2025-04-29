@@ -1,5 +1,5 @@
-import { Providers } from '@/components/providers';
 import { Theme } from '@radix-ui/themes';
+import { Providers } from '@/components/Providers';
 import { Metadata } from 'next';
 import Link from 'next/link';
 import { inter } from "./fonts";
@@ -9,7 +9,7 @@ import packageJson from "../package.json";
 import {ChatProviderConfigProvider} from "@/app/context/ChatProviderConfigContext";
 
 export const metadata: Metadata = {
-  title: 'QueryCraft',
+  title: 'Query Craft',
   description: 'A powerful database query tool',
 };
 
@@ -28,7 +28,7 @@ export default function RootLayout({
                 <span className="text-xl font-bold flex items-center space-x-2">
                   <Link href="/">QueryCraft</Link>
                   <span className="text-sm text-gray-500">V{packageJson.version}</span>
-              </span>
+                </span>
                 <div className="space-x-4">
                   <Link href="/" className="hover:text-blue-300">
                     Home
