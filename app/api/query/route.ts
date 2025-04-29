@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Get settings and database connections
-    const settings = await getSettings(session.user.id);
+    const settings = await getSettings();
     const connections = await getDatabaseConnections(session.user.id);
     const currentConnection = connections.find(conn => conn.id === connectionId);
 

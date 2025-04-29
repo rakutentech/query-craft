@@ -37,7 +37,8 @@ import {
   RotateCcw,
   Check,
   Pencil,
-  Loader2
+  Loader2,
+  Share2
 } from "lucide-react";
 import { format, parseISO, addHours } from "date-fns";
 import ReactMarkdown from 'react-markdown';
@@ -45,6 +46,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { UnauthorizedAccess } from "@/components/UnauthorizedAccess";
 import {useChatProviderConfig} from "@/app/context/ChatProviderConfigContext";
+import { useToast } from "@/components/ui/use-toast";
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 
@@ -112,6 +114,7 @@ export default function DatabaseQueryApp() {
   const conversationsCache = useRef<Map<number, Conversation[]>>(new Map());
   const [showAuth, setShowAuth] = useState(false);
   const { providerConfig } = useChatProviderConfig();
+  const { toast } = useToast();
 
   useEffect(() => {
     checkSettings();
@@ -448,6 +451,46 @@ export default function DatabaseQueryApp() {
     setEditingSqlId(null);
   };
 
+  const handleShareMessage = async (messageId: number) => {
+    try {
+      const response = await fetch(`/api/messages/${messageId}/share`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate share link');
+      }
+
+      const data = await response.json();
+      const shareUrl = `${window.location.origin}/messages/shared/${data.token}`;
+      
+      await navigator.clipboard.writeText(shareUrl);
+      toast({
+        title: "Share link generated",
+        description: (
+          <div className="mt-2">
+            <p className="text-sm">Link copied to clipboard:</p>
+            <a 
+              href={shareUrl} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-sm text-blue-500 hover:underline break-all"
+            >
+              {shareUrl}
+            </a>
+          </div>
+        ),
+      });
+    } catch (error) {
+      console.error('Error sharing message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate share link",
+        variant: "destructive",
+      });
+    }
+  };
+
   const renderMessage = (message: Message) => {
     const isError = message.error;
 
@@ -686,6 +729,15 @@ export default function DatabaseQueryApp() {
             <p className="text-xs mt-2 opacity-70">
               {formatJapanTime(message.timestamp)}
             </p>
+            <div className="mt-2 flex justify-end">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleShareMessage(message.id)}
+              >
+                <Share2 className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>

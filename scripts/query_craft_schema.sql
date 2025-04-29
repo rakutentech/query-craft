@@ -65,7 +65,9 @@ CREATE TABLE IF NOT EXISTS messages (
     content TEXT,
     sender ENUM('user', 'system'),
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_conversation_messages (conversationId)
+    share_token VARCHAR(255) UNIQUE,
+    INDEX idx_conversation_messages (conversationId),
+    INDEX idx_share_token (share_token)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create settings table

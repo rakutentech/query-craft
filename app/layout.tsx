@@ -7,6 +7,7 @@ import "@radix-ui/themes/styles.css";
 import "./globals.css";
 import packageJson from "../package.json";
 import {ChatProviderConfigProvider} from "@/app/context/ChatProviderConfigContext";
+import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
   title: 'Query Craft',
@@ -46,6 +47,7 @@ export default function RootLayout({
           </div>
           </Theme>
         </Providers>
+        <Toaster />
       </body>
     </html>
   );

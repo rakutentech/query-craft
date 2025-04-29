@@ -1,6 +1,7 @@
 import { NextAuthOptions } from "next-auth";
 import GithubProvider from "next-auth/providers/github";
 import { storeUser } from "@/app/lib/db";
+import { getServerSession } from "next-auth/next";
 
 export const authOptions: NextAuthOptions = {
   providers: process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? [
@@ -76,4 +77,12 @@ export const authOptions: NextAuthOptions = {
     },
   },
   debug: process.env.NODE_ENV === 'development',
-}; 
+};
+
+export async function checkUserSession() {
+  const session = await getServerSession(authOptions);
+  return {
+    isAuthenticated: !!session?.user?.id,
+    userId: session?.user?.id
+  };
+} 

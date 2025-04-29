@@ -1,20 +1,10 @@
 // app/api/settings/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getSettings, saveSettings, getDatabaseConnections, saveDatabaseConnection, deleteDatabaseConnection, testDatabaseConnection } from '@/app/lib/db';
+import { getSettings, saveSettings, getDatabaseConnections, saveDatabaseConnection, deleteDatabaseConnection, testDatabaseConnection, DatabaseConnection } from '@/app/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/lib/auth';
 
-interface DatabaseConnection {
-  id?: number;
-  projectName: string;
-  dbDriver: string;
-  dbHost: string;
-  dbPort: string;
-  dbUsername: string;
-  dbPassword: string;
-  dbName: string;
-  schema: string;
-}
+
 
 export async function GET() {
   try {
@@ -23,7 +13,7 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const settings = await getSettings(session.user.id);
+    const settings = await getSettings();
     const databaseConnections = await getDatabaseConnections(session.user.id);
     return NextResponse.json({ settings, databaseConnections });
   } catch (error) {
@@ -54,7 +44,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Save general settings
-    await saveSettings({ ...aiSettings, user_id: session.user.id });
+    await saveSettings(aiSettings.systemPrompt);
 
     // Save or update database connections
     for (const connection of databaseConnections) {
