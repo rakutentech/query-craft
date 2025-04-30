@@ -15,6 +15,8 @@ import OpenAI from "openai";
 import {Anthropic} from "@anthropic-ai/sdk";
 import {generateClaudeChatResponse} from "@/app/lib/claude";
 import {generateOpenAIChatResponse} from "@/app/lib/openai";
+import {generateLMStudioChatResponse} from "@/app/lib/lm-studio";
+import {Chat, ChatInput, ChatMessageInput} from "@lmstudio/sdk";
 
 export async function POST(request: NextRequest) {
   try {
@@ -96,6 +98,22 @@ export async function POST(request: NextRequest) {
         ];
 
         aiResponse = await generateOllamaChatResponse(providerConfig.config.ollama, ollamaMessages);
+        break;
+      case "LM Studio":
+        console.log("LM Studio config", providerConfig.config.lmStudio);
+        // Prepare messages for LM Studio
+        const lmStudioMessages = [
+          { role: "system", content: fullSystemPrompt },
+          ...conversationHistory.map(
+              (msg) =>
+                  ({
+                    role: msg.sender === "user" ? "user" : "assistant",
+                    content: msg.content
+                  })
+          )
+        ];
+        // Generate response from LM Studio
+        aiResponse = await generateLMStudioChatResponse(providerConfig.config.lmStudio, lmStudioMessages as ChatInput);
         break;
       case "Claude":
         console.log("Claude config", providerConfig.config.claude);

@@ -647,6 +647,7 @@ export default function DatabaseQueryApp() {
     const providerImageMap: { [key: string]: string } = {
       "Azure OpenAI": "/azure-icon.svg",
       "Ollama": "/ollama-icon.svg",
+      "LM Studio": "/lmstudio-icon.svg",
       "Claude": "/claude-icon.svg",
       "OpenAI": "/chatgpt-icon.svg",
     };
