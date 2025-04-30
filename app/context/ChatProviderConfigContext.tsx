@@ -4,7 +4,7 @@ import React, {createContext, useContext, useState, ReactNode, useEffect} from "
 import Cookies from "js-cookie";
 
 export type ProviderConfig = {
-    selectedProvider: "Azure OpenAI" | "Ollama" | "Claude" | "OpenAI";
+    selectedProvider: "Azure OpenAI" | "Ollama" | "LM Studio" | "Claude" | "OpenAI";
     config: {
         azure: {
             endpoint: string;
@@ -16,6 +16,10 @@ export type ProviderConfig = {
             type: string;
             endpoint: string;
             apiKey: string;
+            model: string;
+        };
+        lmStudio: {
+            endpoint: string;
             model: string;
         };
         claude: {
@@ -44,6 +48,10 @@ export const defaultProviderConfig: ProviderConfig = {
             type: "Local",
             endpoint: "http://localhost:11434",
             apiKey: "",
+            model: "",
+        },
+        lmStudio: {
+            endpoint: "http://localhost:1234",
             model: "",
         },
         claude: {

@@ -16,6 +16,7 @@ function ChatProviderConfig() {
     const [testResult, setTestResult] = useState<string | null>(null);
     const [isTesting, setIsTesting] = useState(false);
     const [ollamaModels, setOllamaModels] = useState<string[]>([]);
+    const [lmStudioModels, setLMStudioModels] = useState<string[]>([]);
 
     const getChatProviderConfigFromCookie = (): any | null => {
         const cookieValue = Cookies.get("chatProviderConfig");
@@ -44,17 +45,34 @@ function ChatProviderConfig() {
         return null;
     };
 
+    const getLMStudioModelsFromCookie = (): any | null => {
+        const cookieValue = Cookies.get("lmStudioModels");
+        if (cookieValue) {
+            try {
+                return decodeURIComponent(cookieValue);
+            } catch (error) {
+                console.error("Failed to parse lmStudioModels cookie:", error);
+                return null;
+            }
+        }
+        return null;
+    };
+
     // Load cached configuration and models from cookies on component mount
     useEffect(() => {
         const loadFromCookies = async () => {
             const chatProviderConfigCookie = getChatProviderConfigFromCookie();
             const ollamaModelsCookie = getOllamaModelsFromCookie();
+            const lmStudioModelsCookie = getLMStudioModelsFromCookie();
 
             if (chatProviderConfigCookie) {
                 setProviderConfig(chatProviderConfigCookie)
             }
             if (ollamaModelsCookie) {
                 setOllamaModels(ollamaModelsCookie.split(','))
+            }
+            if (lmStudioModelsCookie) {
+                setOllamaModels(lmStudioModelsCookie.split(','))
             }
 
             // Fetch local Ollama models if the provider is Ollama and type is Local
@@ -64,13 +82,20 @@ function ChatProviderConfig() {
             ) {
                 await fetchOllamaModels();
             }
+            // Fetch LM Studio models if the provider is LM Studio
+            if (
+                chatProviderConfigCookie?.selectedProvider === "LM Studio"
+            ) {
+                await fetchLMStudioModels();
+            }
         };
 
         loadFromCookies();
-    }, [setProviderConfig, setOllamaModels]);
+    }, [setProviderConfig, setOllamaModels, setLMStudioModels]);
 
     useEffect(() => {
         fetchOllamaModels()
+        fetchLMStudioModels
     }, []);
 
     const fetchOllamaModels = async () => {
@@ -107,13 +132,49 @@ function ChatProviderConfig() {
         }
     };
 
+    const fetchLMStudioModels = async () => {
+        try {
+            const endpoint = providerConfig.config.lmStudio?.endpoint;
+            if (!endpoint) {
+                setFormErrors((prev) => ({
+                    ...prev,
+                    "ollama-endpoint": "LM Studio endpoint is required to fetch models.",
+                }));
+                return;
+            }
+
+            console.log("Fetching LM Studio models from endpoint:", endpoint);
+
+            const res = await fetch(`/api/provider/lmstudio?endpoint=${encodeURIComponent(endpoint)}`);
+            if (!res.ok) {
+                throw new Error("Failed to fetch LM Studio models.");
+            }
+
+            const data = await res.json();
+            console.log("Fetched LM Studio models:", data.models)
+            setLMStudioModels(data.models || []);
+
+            // Save models to cookies
+            const encodedModels = encodeURIComponent(data.models || []);
+            Cookies.set("lmStudioModels", encodedModels, {
+                path: "/",
+                expires: 1 / 24, // 1 hour
+                secure: true,
+                sameSite: "strict",
+            });
+        } catch (error) {
+            console.error("Error fetching LM Studio models:", error);
+            setLMStudioModels([]);
+        }
+    };
+
     const RequiredLabel = ({ htmlFor, children }: { htmlFor: string, children: React.ReactNode }) => (
         <Label htmlFor={htmlFor} className="flex items-center">
             {children} <span className="text-red-500 ml-1">*</span>
         </Label>
     );
 
-    const handleProviderChange = (provider: "Azure OpenAI" | "Ollama" | "Claude" | "OpenAI") => {
+    const handleProviderChange = (provider: "Azure OpenAI" | "Ollama" | "LM Studio" | "Claude" | "OpenAI") => {
         setProviderConfig(( prevConfig) => {
             const updatedConfig = { ...prevConfig, selectedProvider: provider };
 
@@ -126,11 +187,18 @@ function ChatProviderConfig() {
                 };
             }
 
+            if (provider === "LM Studio") {
+                updatedConfig.config.lmStudio = {
+                    endpoint: "http://localhost:1234", // Default endpoint
+                    model: prevConfig.config.lmStudio?.model || "", // Retain model if already set
+                };
+            }
+
             return updatedConfig;
         });
     };
 
-    const handleInputChange = (provider: "azure" | "ollama" | "claude" | "openai", field: string, value: string) => {
+    const handleInputChange = (provider: "azure" | "ollama" | "lmStudio" | "claude" | "openai", field: string, value: string) => {
         setProviderConfig((prevConfig) => ({
             ...prevConfig,
             config: {
@@ -212,6 +280,21 @@ function ChatProviderConfig() {
                 }
                 const data = await res.json();
                 response = data.response;
+            } else if (selectedProvider === "LM Studio") {
+                const res = await fetch('/api/provider/lmstudio', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        lmStudioConfig: config.lmStudio,
+                        messages: [{ role: "user", content: "Test message" }],
+                    }),
+                });
+                if (res.status !== 200) {
+                    setTestResult("Connection failed. Please check your configuration.");
+                    return;
+                }
+                const data = await res.json();
+                response = data.response;
             } else if (selectedProvider === "OpenAI") {
                 const res = await fetch('/api/provider/openai', {
                     method: 'POST',
@@ -248,10 +331,11 @@ function ChatProviderConfig() {
                     <select
                         id="provider"
                         value={providerConfig.selectedProvider}
-                        onChange={(e) => handleProviderChange(e.target.value as "Azure OpenAI" | "Ollama" | "Claude" | "OpenAI")}
+                        onChange={(e) => handleProviderChange(e.target.value as "Azure OpenAI" | "Ollama" | "LM Studio" | "Claude" | "OpenAI")}
                     >
                         <option value="Azure OpenAI">Azure OpenAI</option>
                         <option value="Ollama">Ollama</option>
+                        <option value="LM Studio">LM Studio</option>
                         <option value="Claude">Claude</option>
                         <option value="OpenAI">OpenAI</option>
                     </select>
@@ -443,20 +527,64 @@ function ChatProviderConfig() {
                     </CardContent>
                 )}
 
-                {providerConfig.selectedProvider === "Claude" && (
-                    <CardContent className="space-y-4">
-                        <div>
-                            <RequiredLabel htmlFor="claude-endpoint">Endpoint</RequiredLabel>
-                            <Input
-                                id="claude-endpoint"
-                                value={providerConfig.config.claude?.endpoint}
-                                onChange={(e) => handleInputChange("claude", "endpoint", e.target.value)}
-                                placeholder="Enter Claude API Endpoint"
-                                required
-                            />
-                            {formErrors["claude-endpoint"] && (
-                                <p className="text-red-500 text-sm mt-1">
-                                    {formErrors["claude-endpoint"]}
+            {providerConfig.selectedProvider === "LM Studio" && (
+                <CardContent className="space-y-4">
+                    <div>
+                        <RequiredLabel htmlFor="lmstudio-endpoint">Endpoint</RequiredLabel>
+                        <Input
+                            id="lmstudio-endpoint"
+                            value={providerConfig.config.lmStudio?.endpoint || "http://localhost:1234"}
+                            onChange={(e) => handleInputChange("lmStudio", "endpoint", e.target.value)}
+                            onBlur={fetchLMStudioModels}
+                            placeholder="Enter LM Studio Endpoint"
+                            required
+                        />
+                        {formErrors["lmstudio-endpoint"] && (
+                            <p className="text-red-500 text-sm mt-1">
+                                {formErrors["lmstudio-endpoint"]}
+                            </p>
+                        )}
+                    </div>
+                    <div>
+                        <RequiredLabel htmlFor="lmstudio-model">Model</RequiredLabel>
+                        <select
+                            id="lmstudio-model"
+                            value={providerConfig.config.lmStudio?.model || ""}
+                            onChange={(e) => handleInputChange("lmStudio", "model", e.target.value)}
+                            required
+                        >
+                            <option value="" disabled>
+                                Select a model
+                            </option>
+                            {lmStudioModels.map((model) => (
+                                <option key={model} value={model}>
+                                    {model}
+                                </option>
+                            ))}
+                        </select>
+                        {formErrors["lmstudio-model"] && (
+                            <p className="text-red-500 text-sm mt-1">
+                                {formErrors["lmstudio-model"]}
+                            </p>
+                        )}
+                    </div>
+                </CardContent>
+            )}
+
+            {providerConfig.selectedProvider === "Claude" && (
+                <CardContent className="space-y-4">
+                    <div>
+                        <RequiredLabel htmlFor="claude-endpoint">Endpoint</RequiredLabel>
+                        <Input
+                            id="claude-endpoint"
+                            value={providerConfig.config.claude?.endpoint}
+                            onChange={(e) => handleInputChange("claude", "endpoint", e.target.value)}
+                            placeholder="Enter Claude API Endpoint"
+                            required
+                        />
+                        {formErrors["claude-endpoint"] && (
+                            <p className="text-red-500 text-sm mt-1">
+                            {formErrors["claude-endpoint"]}
                                 </p>
                             )}
                         </div>
