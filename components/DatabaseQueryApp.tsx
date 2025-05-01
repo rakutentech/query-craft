@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, {useState, useEffect, useRef, useContext} from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -45,8 +45,12 @@ import ReactMarkdown from 'react-markdown';
 import { Textarea } from "@/components/ui/textarea";
 import { useSession, signIn, signOut } from 'next-auth/react';
 import { UnauthorizedAccess } from "@/components/UnauthorizedAccess";
-import {useChatProviderConfig} from "@/app/context/ChatProviderConfigContext";
+import {
+  useChatProviderConfig
+} from "@/app/context/ChatProviderConfigContext";
 import { useToast } from "@/components/ui/use-toast";
+
+import Image from "next/image";
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 const ENABLE_OAUTH = process.env.NEXT_PUBLIC_ENABLE_OAUTH;
@@ -113,7 +117,7 @@ export default function DatabaseQueryApp() {
   const [loadingOperation, setLoadingOperation] = useState<{ type: 'explain' | 'run' | null; messageId: number | null }>({ type: null, messageId: null });
   const conversationsCache = useRef<Map<number, Conversation[]>>(new Map());
   const [showAuth, setShowAuth] = useState(false);
-  const { providerConfig } = useChatProviderConfig();
+  const { providerConfig} = useChatProviderConfig();
   const { toast } = useToast();
 
   useEffect(() => {
@@ -687,6 +691,19 @@ export default function DatabaseQueryApp() {
       }
     };
 
+    // Map provider names to image paths
+    const providerImageMap: { [key: string]: string } = {
+      "Azure OpenAI": "/azure-icon.svg",
+      "Ollama": "/ollama-icon.svg",
+      "LM Studio": "/lmstudio-icon.svg",
+      "Claude": "/claude-icon.svg",
+      "OpenAI": "/chatgpt-icon.svg",
+    };
+
+    // Default to a generic icon if no match is found
+    const imagePath = providerImageMap[providerConfig.selectedProvider] || "/chatgpt-icon.svg";
+
+
     return (
       <div
         key={message.id}
@@ -708,7 +725,13 @@ export default function DatabaseQueryApp() {
               {message.sender === "user" ? (
                 <User className="w-5 h-5 text-blue-600" />
               ) : (
-                <Bot className="w-5 h-5 text-gray-600" />
+                // <Bot className="w-5 h-5 text-gray-600" />
+                  <Image
+                      src={imagePath} // Path to your custom icon in the public folder
+                      alt={`${providerConfig.selectedProvider} Icon`}
+                      width={20} // Adjust the width as needed
+                      height={20} // Adjust the height as needed
+                  />
               )}
             </AvatarFallback>
           </Avatar>
@@ -760,7 +783,7 @@ export default function DatabaseQueryApp() {
     <div className="bg-gray-100 min-h-screen">
       <div className="container mx-auto py-6 px-4">
         <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-800">QueryCraft Chat</h1>
+          
           <div className="flex items-center space-x-4">
             {showAuth && (
               session ? (
