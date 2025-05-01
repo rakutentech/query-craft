@@ -5,14 +5,12 @@ import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/lib/auth';
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const conversationId = parseInt(params.id);
-
   try {
+    const session = await getServerSession(authOptions);
+    const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (session?.user?.id || 'anonymous') : 'anonymous';
+
+    const conversationId = parseInt(params.id);
+
     const messages = await getConversationMessages(conversationId);
     const processedMessages = messages.map(msg => {
       if (msg.sender === 'system' && msg.content.startsWith('```sql')) {

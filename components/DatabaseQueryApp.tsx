@@ -49,6 +49,7 @@ import {useChatProviderConfig} from "@/app/context/ChatProviderConfigContext";
 import { useToast } from "@/components/ui/use-toast";
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
+const ENABLE_OAUTH = process.env.NEXT_PUBLIC_ENABLE_OAUTH;
 
 
 interface QueryResult {
@@ -87,7 +88,6 @@ interface Conversation {
 
 export default function DatabaseQueryApp() {
   const { data: session, status } = useSession();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<Conversation[]>([]); 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
@@ -119,9 +119,9 @@ export default function DatabaseQueryApp() {
   useEffect(() => {
     checkSettings();
     fetchDatabaseConnections();
-    setShowAuth(process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true');
+    setShowAuth(ENABLE_OAUTH === 'true');
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ENABLE_OAUTH]);
 
   useEffect(() => {
     if (selectedConnectionId !== null) {
@@ -752,7 +752,7 @@ export default function DatabaseQueryApp() {
     );
   }
 
-  if (!session) {
+  if (showAuth && !session) {
     return <UnauthorizedAccess />;
   }
 

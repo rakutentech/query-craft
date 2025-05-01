@@ -449,7 +449,7 @@ export default function SharedMessagePage({ params }: { params: { token: string 
               {canEdit && (
                 <p className="text-green-600">You have permission to run, explain and edit this message</p>
               )}
-              {!session && (
+              {(!session && process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true') && (
                 <div className="flex items-center justify-center gap-2 mt-2">
                   <p className="text-blue-600">Sign in to run and explain and Edit SQL queries</p>
                   <Button

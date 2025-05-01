@@ -1,16 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkUserSession } from '@/app/lib/auth';
 import { generateShareToken } from '@/app/lib/db';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/lib/auth';
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const { isAuthenticated } = await checkUserSession();
-  if (!isAuthenticated) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const messageId = parseInt(params.id);
-
   try {
+    const session = await getServerSession(authOptions);
+    const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (session?.user?.id || 'anonymous') : 'anonymous';
+
+    const messageId = parseInt(params.id);
+
     const shareToken = await generateShareToken(messageId);
     return NextResponse.json({ token: shareToken });
   } catch (error) {

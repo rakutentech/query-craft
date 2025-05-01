@@ -8,6 +8,7 @@ import util from 'util';
 import { exec } from 'child_process';
 import path from 'path';
 import crypto from 'crypto';
+
 export interface DatabaseConfig {
   type: 'sqlite' | 'mysql';
   mysql?: {
@@ -21,8 +22,8 @@ export interface DatabaseConfig {
 
 
 export const databaseConfig: DatabaseConfig = {
-  type: process.env.ENABLE_MYSQL === 'true' ? 'mysql' : 'sqlite',
-  mysql: process.env.ENABLE_MYSQL === 'true' ? {
+  type: process.env.DB_DRIVER === 'mysql' ? 'mysql' : 'sqlite',
+  mysql: process.env.DB_DRIVER === 'mysql' ? {
     host: process.env.DB_HOST || 'localhost',
     port: parseInt(process.env.DB_PORT || '3306'),
     user: process.env.DB_USER || '',

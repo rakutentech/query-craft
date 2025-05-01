@@ -80,6 +80,13 @@ export const authOptions: NextAuthOptions = {
 };
 
 export async function checkUserSession() {
+  if (process.env.NEXT_PUBLIC_ENABLE_OAUTH !== 'true') {
+    return {
+      isAuthenticated: true,
+      userId: 'anonymous'
+    };
+  }
+  
   const session = await getServerSession(authOptions);
   return {
     isAuthenticated: !!session?.user?.id,

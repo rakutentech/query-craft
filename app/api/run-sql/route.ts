@@ -7,9 +7,7 @@ import { authOptions } from '@/app/lib/auth';
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (session?.user?.id || 'anonymous') : 'anonymous';
 
     const { sql, connectionId } = await request.json();
     console.log('Executing SQL:', sql, 'on connection:', connectionId);
@@ -21,47 +19,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await executeQuery(sql, connectionId, session.user.id);
+    const result = await executeQuery(sql, connectionId, userId);
     return NextResponse.json({ result });
-  } catch (error: unknown) {
-    console.error('Error executing SQL query:', error);
-    
-    let errorMessage = 'An unknown error occurred';
-    let errorDetails = {};
-    let statusCode = 500;
-
-    if (error instanceof Error) {
-      errorMessage = error.message;
-      errorDetails = {
-        name: error.name,
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
-      };
-      
-      // Check if it's a MySQL error
-      if ('code' in error && typeof (error as any).code === 'string') {
-        const mysqlError = error as QueryError;
-        errorMessage = 'Database error occurred';
-        errorDetails = {
-          code: mysqlError.code,
-          sqlMessage: mysqlError.message,
-          sqlState: mysqlError.sqlState,
-        };
-        statusCode = 400; // Bad Request for database errors
-      }
-
-      // Check for connection-related errors
-      if (errorMessage.includes('Database connection not found')) {
-        statusCode = 404; // Not Found for invalid connection ID
-      }
-    }
-    
-    return NextResponse.json(
-      { 
-        error: 'Failed to execute SQL query', 
-        message: errorMessage,
-        details: errorDetails,
-      },
-      { status: statusCode }
-    );
+  } catch (error) {
+    console.error('Error executing SQL:', error);
+    return NextResponse.json({ error: 'Failed to execute SQL' }, { status: 500 });
   }
 }

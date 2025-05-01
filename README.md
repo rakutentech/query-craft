@@ -44,7 +44,7 @@ cp .env.template .env
 NEXT_PUBLIC_BASE_PATH=
 
 # Database Configuration (Optional - defaults to SQLite)
-ENABLE_MYSQL=true # Set to 'true' to use MySQL instead of SQLite
+DB_DRIVER=sqlite # Set to 'mysql' to use MySQL instead of SQLite
 DB_HOST=your_mysql_host
 DB_PORT=your_mysql_port
 DB_USER=your_mysql_user

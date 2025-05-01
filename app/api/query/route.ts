@@ -21,9 +21,7 @@ import {generateOpenAIChatResponse} from "@/app/lib/openai";
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (session?.user?.id || 'anonymous') : 'anonymous';
 
     const { query, providerConfig: providerConfig, conversationId, connectionId } = await request.json();
 
@@ -39,7 +37,7 @@ export async function POST(request: NextRequest) {
       currentConversationId = await createConversation(
         query.substring(0, 20) + "...",
         connectionId,
-        session.user.id
+        userId
       );
     }
 
@@ -53,7 +51,7 @@ export async function POST(request: NextRequest) {
 
     // Get settings and database connections
     const settings = await getSettings();
-    const connections = await getDatabaseConnections(session.user.id);
+    const connections = await getDatabaseConnections(userId);
     const currentConnection = connections.find(conn => conn.id === connectionId);
 
     if (!currentConnection) {

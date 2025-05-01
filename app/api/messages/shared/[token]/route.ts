@@ -1,19 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { checkUserSession } from '@/app/lib/auth';
 import { getSharedMessage, updateSharedMessage } from '@/app/lib/db';
+import { getToken } from 'next-auth/jwt';
 
 export async function GET(request: NextRequest, { params }: { params: { token: string } }) {
-  const { token } = params;
-  const { isAuthenticated } = await checkUserSession();
-
   try {
-    const result = await getSharedMessage(token);
+    const token = await getToken({ req: request });
+    const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (token?.sub || 'anonymous') : 'anonymous';
+
+    const { token: messageToken } = params;
+    const result = await getSharedMessage(messageToken);
     if (!result) {
       return NextResponse.json({ error: 'Message not found' }, { status: 404 });
     }
     return NextResponse.json({
       ...result,
-      canEdit: isAuthenticated
+      canEdit: userId !== 'anonymous'
     });
   } catch (error) {
     console.error('Error fetching shared message:', error);
@@ -22,16 +23,16 @@ export async function GET(request: NextRequest, { params }: { params: { token: s
 }
 
 export async function POST(request: NextRequest, { params }: { params: { token: string } }) {
-  const { isAuthenticated } = await checkUserSession();
-  if (!isAuthenticated) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  const { token } = params;
-  const { content } = await request.json();
-
   try {
-    await updateSharedMessage(token, content);
+    const token = await getToken({ req: request });
+    if (!token?.sub) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { token: messageToken } = params;
+    const { content } = await request.json();
+
+    await updateSharedMessage(messageToken, content);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error('Error updating shared message:', error);
