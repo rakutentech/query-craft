@@ -97,7 +97,6 @@ export default function DatabaseQueryApp() {
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<number | null>(null);
-  const [showAbout, setShowAbout] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingSql, setPendingSql] = useState<{
     sql: string;
@@ -124,7 +123,11 @@ export default function DatabaseQueryApp() {
     checkSettings();
     fetchDatabaseConnections();
     setShowAuth(ENABLE_OAUTH === 'true');
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (typeof window !== 'undefined') {
+      window.showAbout = () => {
+        // This is now handled by the layout component
+      };
+    }
   }, [ENABLE_OAUTH]);
 
   useEffect(() => {
@@ -781,9 +784,8 @@ export default function DatabaseQueryApp() {
 
   return (
     <div className="bg-gray-100 min-h-screen">
-      <div className="container mx-auto py-6 px-4">
-        <div className="flex justify-between items-center mb-6">
-          
+      <div className="container mx-auto py-2 px-2">
+        <div className="flex justify-end items-center mb-2 border-b border-gray-200 pb-2">
           <div className="flex items-center space-x-4">
             {showAuth && (
               session ? (
@@ -823,40 +825,8 @@ export default function DatabaseQueryApp() {
                 </Button>
               )
             )}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setShowAbout(!showAbout)}
-                  >
-                    <Info className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>About QueryCraft</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
           </div>
         </div>
-
-        {showAbout && (
-          <Card className="mb-6">
-            <CardHeader>About QueryCraft</CardHeader>
-            <CardContent>
-              <p>
-                QueryCraft is an AI-powered tool that helps you generate and
-                execute SQL queries using natural language. Simply type your
-                question, and QueryCraft will generate the appropriate SQL query
-                and run it against your database. It&apos;s designed to make database
-                querying more accessible and efficient for both beginners and
-                experienced users.
-              </p>
-            </CardContent>
-          </Card>
-        )}
 
         <div className="flex space-x-6">
           <div className="w-1/4 min-w-[250px]">

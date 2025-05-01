@@ -1,14 +1,5 @@
-import { Theme } from '@radix-ui/themes';
-import { Providers } from '@/components/Providers';
 import { Metadata } from 'next';
-import Link from 'next/link';
-import { inter } from "./fonts";
-import Image from "next/image";
-import "@radix-ui/themes/styles.css";
-import "./globals.css";
-import packageJson from "../package.json";
-import {ChatProviderConfigProvider} from "@/app/context/ChatProviderConfigContext";
-import { Toaster } from "@/components/ui/toaster"
+import LayoutContent from '@/components/layout-content';
 
 export const metadata: Metadata = {
   title: 'Query Craft',
@@ -20,38 +11,5 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <html lang="en">
-      <body className={`${inter.variable} font-sans`}>
-        <Providers>
-          <Theme>
-            <nav className="bg-gray-800 text-white p-4">
-              <div className="container mx-auto flex justify-between items-center">
-                <span className="text-xl font-bold flex items-center space-x-2">
-                <Link href="/">
-                  <Image width={80} height={30} src="/logo.png" alt="Query Craft" />
-                </Link>
-                  <span className="text-sm text-gray-500">V{packageJson.version}</span>
-                </span>
-                <div className="space-x-4">
-                  <Link href="/" className="hover:text-blue-300">
-                    Home
-                  </Link>
-                  <Link href="/settings" className="hover:text-blue-300">
-                    Settings
-                  </Link>
-                </div>
-              </div>
-            </nav>
-            <div className="main">
-            <ChatProviderConfigProvider>
-              {children}
-            </ChatProviderConfigProvider>
-          </div>
-          </Theme>
-        </Providers>
-        <Toaster />
-      </body>
-    </html>
-  );
+  return <LayoutContent>{children}</LayoutContent>;
 }
