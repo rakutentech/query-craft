@@ -169,7 +169,7 @@ function ChatProviderConfig() {
     };
 
     const RequiredLabel = ({ htmlFor, children }: { htmlFor: string, children: React.ReactNode }) => (
-        <Label htmlFor={htmlFor} className="flex items-center">
+        <Label htmlFor={htmlFor} className="flex items-center mb-2">
             {children} <span className="text-red-500 ml-1">*</span>
         </Label>
     );
@@ -327,7 +327,7 @@ function ChatProviderConfig() {
         <div>
             <CardContent className="space-y-4">
                 <div>
-                    <label htmlFor="provider" className="block text-sm font-medium">
+                    <label htmlFor="provider" className="block text-sm font-medium text-gray-700 mb-2">
                         Select Provider:
                     </label>
                     <select
@@ -418,7 +418,7 @@ function ChatProviderConfig() {
             {providerConfig.selectedProvider === "Ollama" && (
                 <CardContent className="space-y-4">
                     <div>
-                        <label htmlFor="ollama-type" className="block text-sm font-medium text-gray-700">
+                        <label htmlFor="ollama-type" className="block text-sm font-medium text-gray-700 mb-2">
                             Ollama Type:
                         </label>
                         <select
@@ -697,7 +697,7 @@ function ChatProviderConfig() {
                 <Button
                     onClick={testConnection}
                     disabled={isTesting}
-                    className="mt-4"
+                    className="float-right text-sm font-medium text-gray-900 focus:outline-none bg-white rounded-full border border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-4 focus:ring-gray-100"
                 >
                     {isTesting ? (
                         <>
