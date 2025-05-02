@@ -80,6 +80,7 @@ interface DatabaseConnection {
   id: number;
   projectName: string;
   dbDriver: string;
+  tag?: string;
 }
 
 interface Conversation {
@@ -108,6 +109,7 @@ export default function DatabaseQueryApp() {
   const [selectedConnectionId, setSelectedConnectionId] = useState<
     number | null
   >(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const [editingSqlId, setEditingSqlId] = useState<number | null>(null);
@@ -770,6 +772,23 @@ export default function DatabaseQueryApp() {
     );
   };
 
+  const filteredConnections = selectedTag
+    ? databaseConnections.filter((conn: DatabaseConnection) => {
+        if (!conn.tag) return false;
+        const tags = conn.tag.split(',').map(t => t.trim());
+        return tags.includes(selectedTag);
+      })
+    : databaseConnections;
+
+  const uniqueTags = Array.from(
+    new Set(
+      databaseConnections
+        .map((conn: DatabaseConnection) => conn.tag?.split(',').map(t => t.trim()) || [])
+        .flat()
+        .filter(Boolean)
+    )
+  );
+
   if (status === "loading") {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -833,12 +852,42 @@ export default function DatabaseQueryApp() {
 
         <div className="flex space-x-6">
           <div className="w-1/4 min-w-[250px]">
-            <Card className="mb-6">
-              <CardHeader>Database Connections</CardHeader>
+            <Card className="mb-4">
+            <CardHeader className="border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-semibold text-gray-800">
+                    Databases
+                  </h2>
+                </div>
+              </CardHeader> 
               <CardContent>
-                <ScrollArea className="h-[200px]">
+                {uniqueTags.length > 0 && (
+                  <div className="mb-4 mt-2">
+                    <div className="text-sm font-medium mb-2">Filter by Tag</div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant={!selectedTag ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setSelectedTag(null)}
+                      >
+                        All
+                      </Button>
+                      {uniqueTags.map(tag => (
+                        <Button
+                          key={tag}
+                          variant={selectedTag === tag ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setSelectedTag(tag)}
+                        >
+                          {tag}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <ScrollArea className="h-[120px]">
                   <ul className="space-y-2">
-                    {databaseConnections.map((connection) => (
+                    {filteredConnections.map((connection) => (
                       <li key={connection.id}>
                         <Button
                           variant={

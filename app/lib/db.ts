@@ -79,6 +79,7 @@ export interface DatabaseConnection {
   dbPassword: string;
   dbName: string;
   schema: string;
+  tag?: string;
   created_at: string;
   updated_at: string;
 }
@@ -753,19 +754,20 @@ export async function saveDatabaseConnection(connection: DatabaseConnection, use
       connection.dbPassword,
       connection.dbName,
       connection.schema,
+      connection.tag,
       now,
       now
     ] as const;
 
     if (databaseConfig.type === 'mysql') {
       const [result] = await (db as mysql.Pool).execute(
-        'INSERT INTO database_connections (user_id, projectName, dbDriver, dbHost, dbPort, dbUsername, dbPassword, dbName, `schema`, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO database_connections (user_id, projectName, dbDriver, dbHost, dbPort, dbUsername, dbPassword, dbName, `schema`, tag, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         params
       );
       return (result as any).insertId;
     } else {
       const result = await (db as SQLiteDatabase).run(
-        'INSERT INTO database_connections (user_id, projectName, dbDriver, dbHost, dbPort, dbUsername, dbPassword, dbName, schema, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+        'INSERT INTO database_connections (user_id, projectName, dbDriver, dbHost, dbPort, dbUsername, dbPassword, dbName, schema, tag, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
         params
       );
       return result.lastID!;
@@ -781,7 +783,7 @@ export async function updateDatabaseConnection(connection: DatabaseConnection, u
 
   if (databaseConfig.type === 'mysql') {
     await (db as mysql.Pool).execute(
-      'UPDATE database_connections SET projectName = ?, dbDriver = ?, dbHost = ?, dbPort = ?, dbUsername = ?, dbPassword = ?, dbName = ?, `schema` = ?, updated_at = ? WHERE id = ? AND user_id = ?',
+      'UPDATE database_connections SET projectName = ?, dbDriver = ?, dbHost = ?, dbPort = ?, dbUsername = ?, dbPassword = ?, dbName = ?, `schema` = ?, tag = ?, updated_at = ? WHERE id = ? AND user_id = ?',
       [
         connection.projectName,
         connection.dbDriver,
@@ -791,6 +793,7 @@ export async function updateDatabaseConnection(connection: DatabaseConnection, u
         connection.dbPassword,
         connection.dbName,
         connection.schema,
+        connection.tag,
         now,
         connection.id,
         userId
@@ -798,7 +801,7 @@ export async function updateDatabaseConnection(connection: DatabaseConnection, u
     );
   } else {
     await (db as SQLiteDatabase).run(
-      'UPDATE database_connections SET projectName = ?, dbDriver = ?, dbHost = ?, dbPort = ?, dbUsername = ?, dbPassword = ?, dbName = ?, schema = ?, updated_at = ? WHERE id = ? AND user_id = ?',
+      'UPDATE database_connections SET projectName = ?, dbDriver = ?, dbHost = ?, dbPort = ?, dbUsername = ?, dbPassword = ?, dbName = ?, schema = ?, tag = ?, updated_at = ? WHERE id = ? AND user_id = ?',
       [
         connection.projectName,
         connection.dbDriver,
@@ -808,6 +811,7 @@ export async function updateDatabaseConnection(connection: DatabaseConnection, u
         connection.dbPassword,
         connection.dbName,
         connection.schema,
+        connection.tag,
         now,
         connection.id,
         userId

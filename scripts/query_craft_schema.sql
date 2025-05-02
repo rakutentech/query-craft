@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS database_connections (
     dbPassword TEXT,
     dbName TEXT,
     `schema` TEXT,
+    tag TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user_connections (user_id)
