@@ -109,7 +109,12 @@ export default function DatabaseQueryApp() {
   const [selectedConnectionId, setSelectedConnectionId] = useState<
     number | null
   >(null);
-  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selectedDatabaseTag') || null;
+    }
+    return null;
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const [editingSqlId, setEditingSqlId] = useState<number | null>(null);
@@ -142,6 +147,14 @@ export default function DatabaseQueryApp() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (selectedTag) {
+      localStorage.setItem('selectedDatabaseTag', selectedTag);
+    } else {
+      localStorage.removeItem('selectedDatabaseTag');
+    }
+  }, [selectedTag]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -789,6 +802,10 @@ export default function DatabaseQueryApp() {
     )
   );
 
+  const handleTagSelect = (tag: string | null) => {
+    setSelectedTag(tag);
+  };
+
   if (status === "loading") {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -868,7 +885,7 @@ export default function DatabaseQueryApp() {
                       <Button
                         variant={!selectedTag ? "default" : "outline"}
                         size="sm"
-                        onClick={() => setSelectedTag(null)}
+                        onClick={() => handleTagSelect(null)}
                       >
                         All
                       </Button>
@@ -877,7 +894,7 @@ export default function DatabaseQueryApp() {
                           key={tag}
                           variant={selectedTag === tag ? "default" : "outline"}
                           size="sm"
-                          onClick={() => setSelectedTag(tag)}
+                          onClick={() => handleTagSelect(tag)}
                         >
                           {tag}
                         </Button>
