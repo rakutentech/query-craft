@@ -7,6 +7,7 @@ export type ProviderConfig = {
     selectedProvider: "Azure OpenAI" | "Ollama" | "LM Studio" | "Claude" | "OpenAI";
     config: {
         azure: {
+            mode: "Built-in" | "Custom";
             endpoint: string;
             apiKey: string;
             model: string;
@@ -23,11 +24,13 @@ export type ProviderConfig = {
             model: string;
         };
         claude: {
+            mode: "Built-in" | "Custom";
             endpoint: string;
             apiKey: string;
             model: string;
         };
         openai: {
+            mode: "Built-in" | "Custom";
             endpoint: string;
             apiKey: string;
             model: string;
@@ -39,6 +42,7 @@ export const defaultProviderConfig: ProviderConfig = {
     selectedProvider: "Azure OpenAI",
     config: {
         azure: {
+            mode: "Built-in",
             endpoint: "",
             apiKey: "",
             model: "",
@@ -55,11 +59,13 @@ export const defaultProviderConfig: ProviderConfig = {
             model: "",
         },
         claude: {
+            mode: "Built-in",
             endpoint: "",
             apiKey: "",
             model: "",
         },
         openai: {
+            mode: "Built-in",
             endpoint: "",
             apiKey: "",
             model: "",
