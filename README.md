@@ -44,18 +44,18 @@ cp .env.template .env
 NEXT_PUBLIC_BASE_PATH=
 
 # Database Configuration (Optional - defaults to SQLite)
-DB_DRIVER=sqlite # Set to 'mysql' to use MySQL instead of SQLite
-DB_HOST=your_mysql_host
-DB_PORT=your_mysql_port
-DB_USER=your_mysql_user
-DB_PASSWORD=your_mysql_password
-DB_NAME=your_database_name
+APP_DB_DRIVER=sqlite # Set to 'mysql' to use MySQL instead of SQLite
+APP_DB_HOST=your_mysql_host
+APP_DB_PORT=your_mysql_port
+APP_DB_USER=your_mysql_user
+APP_DB_PASSWORD=your_mysql_password
+APP_DB_NAME=your_database_name
 
 # Authentication (Optional)
 NEXT_PUBLIC_ENABLE_OAUTH=false  # Set to true to enable GitHub authentication
-GITHUB_ID=your_github_client_id
-GITHUB_SECRET=your_github_client_secret
-GITHUB_ENTERPRISE_URL=your_github_enterprise_url
+OAUTH_GITHUB_ID=your_github_client_id
+OAUTH_GITHUB_SECRET=your_github_client_secret
+OAUTH_GITHUB_ENTERPRISE_URL=your_github_enterprise_url
 NEXTAUTH_URL=your_app_base_url
 NEXTAUTH_SECRET=your_nextauth_secret
 

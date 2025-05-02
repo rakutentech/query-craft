@@ -3,11 +3,12 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "npm run init-db && next dev",
+    "build": "npm run init-db && next build",
     "start": "next start",
     "lint": "next lint",
-    "boot-app": "npm run lint && npm run build && npm run start"
+    "init-db": "node scripts/init-db.js",
+    "prestart": "npm run init-db"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
@@ -46,6 +47,7 @@
     "react-dom": "^18",
     "react-markdown": "^10.1.0",
     "reflect-metadata": "^0.2.2",
+    "sharp": "^0.34.1",
     "sqlite": "^5.1.1",
     "sqlite3": "^5.1.7",
     "tailwind-merge": "^2.5.2",

@@ -1,5 +1,5 @@
 import { Metadata } from 'next';
-import LayoutContent from '@/components/layout-content';
+import LayoutContent from '@/components/LayoutContent';
 
 export const metadata: Metadata = {
   title: 'Query Craft',

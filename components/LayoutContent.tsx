@@ -11,7 +11,7 @@ import "@/app/globals.css";
 import packageJson from "../package.json";
 import {ChatProviderConfigProvider} from "@/app/context/ChatProviderConfigContext";
 import { Toaster } from "@/components/ui/toaster"
-import { AboutDialog } from '@/components/about-dialog';
+import { AboutDialog } from '@/components/AboutDialog';
 import { useState, useEffect } from 'react';
 
 export default function LayoutContent({

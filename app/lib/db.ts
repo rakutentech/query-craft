@@ -22,13 +22,13 @@ export interface DatabaseConfig {
 
 
 export const databaseConfig: DatabaseConfig = {
-  type: process.env.DB_DRIVER === 'mysql' ? 'mysql' : 'sqlite',
-  mysql: process.env.DB_DRIVER === 'mysql' ? {
-    host: process.env.DB_HOST || 'localhost',
-    port: parseInt(process.env.DB_PORT || '3306'),
-    user: process.env.DB_USER || '',
-    password: process.env.DB_PASSWORD || '',
-    database: process.env.DB_NAME || ''
+  type: process.env.APP_DB_DRIVER === 'mysql' ? 'mysql' : 'sqlite',
+  mysql: process.env.APP_DB_DRIVER === 'mysql' ? {
+    host: process.env.APP_DB_HOST || 'localhost',
+    port: parseInt(process.env.APP_DB_PORT || '3306'),
+    user: process.env.APP_DB_USER || '',
+    password: process.env.APP_DB_PASSWORD || '',
+    database: process.env.APP_DB_NAME || ''
   } : undefined
 };
 
@@ -619,140 +619,30 @@ async function getPostgreSQLSchema(connection: DatabaseConnection): Promise<stri
 
 export async function storeUser(user: User): Promise<void> {
   const db = await getDb();
-  if (databaseConfig.type === 'mysql') {
-    await (db as mysql.Pool).execute(
-      `
-      INSERT INTO users (id, name, email, image, github_id)
-      VALUES (?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE
-        name = VALUES(name),
-        email = VALUES(email),
-        image = VALUES(image),
-        github_id = VALUES(github_id)
-      `,
-      [user.id, user.name, user.email, user.image, user.githubId]
-    );
-  } else {
-    await (db as SQLiteDatabase).run(
-      `
-      INSERT OR REPLACE INTO users (id, name, email, image, github_id)
-      VALUES (?, ?, ?, ?, ?)
-      `,
-      [user.id, user.name, user.email, user.image, user.githubId]
-    );
-  }
-}
-
-async function initializeDatabase() {
-  const db = await getDb();
-  console.log("Initializing database...");
   if (databaseConfig.type === 'sqlite') {
-    await (db as SQLiteDatabase).exec(`
-      CREATE TABLE IF NOT EXISTS users (
-        id TEXT PRIMARY KEY,
-        name TEXT,
-        email TEXT,
-        image TEXT,
-        github_id TEXT NOT NULL,
-        last_login_at DATETIME,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS user_preferences (
-        user_id TEXT PRIMARY KEY,
-        theme TEXT DEFAULT 'light',
-        language TEXT DEFAULT 'en',
-        timezone TEXT DEFAULT 'UTC',
-        notifications_enabled INTEGER DEFAULT 1,
-        email_notifications INTEGER DEFAULT 1,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS user_activity (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id TEXT NOT NULL,
-        activity_type TEXT NOT NULL,
-        activity_details TEXT,
-        ip_address TEXT,
-        user_agent TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS user_permissions (
-        user_id TEXT NOT NULL,
-        permission TEXT NOT NULL,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (user_id, permission)
-      );
-
-      CREATE TABLE IF NOT EXISTS conversations (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id TEXT NOT NULL,
-        connectionId INTEGER,
-        title TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS messages (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        conversationId INTEGER,
-        content TEXT,
-        sender TEXT CHECK(sender IN ('user', 'system')),
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        share_token TEXT UNIQUE
-      );
-
-      CREATE TABLE IF NOT EXISTS settings (
-        id INTEGER PRIMARY KEY CHECK (id = 1),
-        systemPrompt TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS database_connections (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id TEXT NOT NULL,
-        projectName TEXT,
-        dbDriver TEXT,
-        dbHost TEXT,
-        dbPort TEXT,
-        dbUsername TEXT,
-        dbPassword TEXT,
-        dbName TEXT,
-        schema TEXT,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS query_history (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        user_id TEXT NOT NULL,
-        connectionId INTEGER,
-        query TEXT,
-        sql TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      -- Create indexes
-      CREATE INDEX IF NOT EXISTS idx_user_activity ON user_activity(user_id, created_at);
-      CREATE INDEX IF NOT EXISTS idx_user_conversations ON conversations(user_id);
-      CREATE INDEX IF NOT EXISTS idx_conversation_messages ON messages(conversationId);
-      CREATE INDEX IF NOT EXISTS idx_user_connections ON database_connections(user_id);
-      CREATE INDEX IF NOT EXISTS idx_user_history ON query_history(user_id);
-      CREATE INDEX IF NOT EXISTS idx_user_settings ON settings(systemPrompt);
-      CREATE INDEX IF NOT EXISTS idx_share_token ON messages(share_token);
-    `);
-    console.log("Database initialized");
+    await (db as SQLiteDatabase).run(`
+      INSERT OR REPLACE INTO users (id, name, email, image, github_id, last_login_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `, [user.id, user.name, user.email, user.image, user.githubId]);
   } else {
-    // please setup mysql db using schema from /scripts/query_craft_schema.sql
-    console.log("Please setup MySQL database using schema from /scripts/query_craft_schema.sql");
+    // MySQL implementation
+    const [rows] = await (db as mysql.Pool).execute(
+      'SELECT * FROM users WHERE id = ?',
+      [user.id]
+    );
+    if (Array.isArray(rows) && rows.length === 0) {
+      await (db as mysql.Pool).execute(
+        'INSERT INTO users (id, name, email, image, github_id, last_login_at, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NOW(), NOW(), NOW())',
+        [user.id, user.name, user.email, user.image, user.githubId]
+      );
+    } else {
+      await (db as mysql.Pool).execute(
+        'UPDATE users SET name = ?, email = ?, image = ?, github_id = ?, last_login_at = NOW(), updated_at = NOW() WHERE id = ?',
+        [user.name, user.email, user.image, user.githubId, user.id]
+      );
+    }
   }
 }
-
-// Call initializeDatabase when the module is loaded
-initializeDatabase().catch(console.error);
 
 export async function generateShareToken(messageId: number): Promise<string> {
   const db = await getDb();
