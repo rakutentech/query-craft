@@ -785,7 +785,10 @@ export default function DatabaseQueryApp() {
   return (
     <div className="bg-gray-100 min-h-screen">
       <div className="container mx-auto py-2 px-2">
-        <div className="flex justify-end items-center mb-2 border-b border-gray-200 pb-2">
+        <div className="flex justify-between items-center border-b border-gray-200 pb-2">
+        <h1 className="text-2xl items-center font-bold p-2 text-gray-800">
+          Chat
+        </h1>
           <div className="flex items-center space-x-4">
             {showAuth && (
               session ? (
