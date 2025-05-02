@@ -6,7 +6,7 @@ import {
   getConversationMessages,
   updateConversationTitle,
   getSettings,
-  getDatabaseConnections
+  getUserConnectionById
 } from "@/app/lib/db";
 import {Message} from "ollama";
 import {generateOllamaChatResponse} from "@/app/lib/ollama";
@@ -53,8 +53,7 @@ export async function POST(request: NextRequest) {
 
     // Get settings and database connections
     const settings = await getSettings();
-    const connections = await getDatabaseConnections(userId);
-    const currentConnection = connections.find(conn => conn.id === connectionId);
+    const currentConnection = await getUserConnectionById(connectionId, userId);
 
     if (!currentConnection) {
       return NextResponse.json(

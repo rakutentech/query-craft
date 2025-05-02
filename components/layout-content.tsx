@@ -7,7 +7,7 @@ import { inter } from "../app/fonts";
 import Image from "next/image";
 import { Home, Settings, HelpCircle } from 'lucide-react';
 import "@radix-ui/themes/styles.css";
-import "../app/globals.css";
+import "@/app/globals.css";
 import packageJson from "../package.json";
 import {ChatProviderConfigProvider} from "@/app/context/ChatProviderConfigContext";
 import { Toaster } from "@/components/ui/toaster"
@@ -34,28 +34,28 @@ export default function LayoutContent({
               <div className="container mx-auto flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <Link href="/" className="hover:opacity-80 transition-opacity">
-                    <Image width={80} height={30} src="/logo.png" alt="Query Craft" />
+                    <Image width={100} height={50} src="/logo.png" alt="Query Craft" />
                   </Link>
-                  <span className="text-sm text-gray-500">V{packageJson.version}</span>
+                  <span className="text-sm text-gray-500 font-bold">V{packageJson.version}</span>
                 </div>
-                <div className="flex items-center space-x-2">
+                <div className="flex items-center space-x-1 mr-2">
                   <Link 
                     href="/" 
-                    className="hover:text-blue-300 flex items-center px-3 py-2 rounded-md transition-colors hover:bg-gray-700"
+                    className="hover:text-blue-100 flex items-center px-3 py-2 rounded-md transition-colors hover:bg-gray-700"
                   >
-                    <Home className="h-5 w-5 mr-2" />
+                    <Home className="h-5 w-5 m-1" />
                   </Link>
                   <Link 
                     href="/settings" 
-                    className="hover:text-blue-300 flex items-center px-3 py-2 rounded-md transition-colors hover:bg-gray-700"
+                    className="hover:text-blue-100 flex items-center px-3 py-2 rounded-md transition-colors hover:bg-gray-700"
                   >
-                    <Settings className="h-5 w-5 mr-2" />
+                    <Settings className="h-5 w-5 m-1" />
                   </Link>
                   <button
                     onClick={() => setShowAbout(true)}
-                    className="hover:text-blue-300 flex items-center px-3 py-2 rounded-md transition-colors hover:bg-gray-700"
+                    className="hover:text-blue-100 flex items-center px-3 py-2 rounded-md transition-colors hover:bg-gray-700"
                   >
-                    <HelpCircle className="h-5 w-5 mr-2" />
+                    <HelpCircle className="h-5 w-5 m-1" />
                   </button>
                 </div>
               </div>

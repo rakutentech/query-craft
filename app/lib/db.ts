@@ -335,7 +335,7 @@ export async function getDatabaseConnections(userId: string): Promise<DatabaseCo
   }
 }
 
-export async function getDatabaseConnection(id: number, userId: string): Promise<DatabaseConnection | null> {
+export async function getUserConnectionById(id: number, userId: string): Promise<DatabaseConnection | null> {
   const db = await getDb();
   if (databaseConfig.type === 'mysql') {
     const [rows] = await (db as mysql.Pool).execute(
@@ -451,8 +451,7 @@ export async function testDatabaseConnection(connection: DatabaseConnection): Pr
 }
 
 export async function executeQuery(sql: string, connectionId: number, userId: string): Promise<any[]> {
-  const connections = await getDatabaseConnections(userId);
-  const connection = connections.find(conn => conn.id === connectionId);
+  const connection = await getUserConnectionById(connectionId, userId);
   
   if (!connection) {
     throw new Error(`Database connection not found for id: ${connectionId}`);
