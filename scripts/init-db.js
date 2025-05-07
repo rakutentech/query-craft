@@ -85,6 +85,7 @@ async function initializeDatabase() {
       dbPassword TEXT,
       dbName TEXT,
       schema TEXT,
+      tag TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
     );
