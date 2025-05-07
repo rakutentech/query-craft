@@ -1,11 +1,13 @@
 "use client";
 
-import React, { createContext, useContext, useState, ReactNode } from "react";
+import React, {createContext, useContext, useState, ReactNode, useEffect} from "react";
+import Cookies from "js-cookie";
 
-type ProviderConfig = {
-    selectedProvider: "Azure OpenAI" | "Ollama" | "Claude" | "OpenAI";
+export type ProviderConfig = {
+    selectedProvider: "Azure OpenAI" | "Ollama" | "LM Studio" | "Claude" | "OpenAI";
     config: {
         azure: {
+            mode: "Built-in" | "Custom";
             endpoint: string;
             apiKey: string;
             model: string;
@@ -17,17 +19,58 @@ type ProviderConfig = {
             apiKey: string;
             model: string;
         };
+        lmStudio: {
+            endpoint: string;
+            model: string;
+        };
         claude: {
+            mode: "Built-in" | "Custom";
             endpoint: string;
             apiKey: string;
             model: string;
         };
         openai: {
+            mode: "Built-in" | "Custom";
             endpoint: string;
             apiKey: string;
             model: string;
         };
     };
+};
+
+export const defaultProviderConfig: ProviderConfig = {
+    selectedProvider: "Azure OpenAI",
+    config: {
+        azure: {
+            mode: "Built-in",
+            endpoint: "",
+            apiKey: "",
+            model: "",
+            apiVersion: "",
+        },
+        ollama: {
+            type: "Local",
+            endpoint: "http://127.0.0.1:11434",
+            apiKey: "",
+            model: "",
+        },
+        lmStudio: {
+            endpoint: "http://127.0.0.1:1234",
+            model: "",
+        },
+        claude: {
+            mode: "Built-in",
+            endpoint: "",
+            apiKey: "",
+            model: "",
+        },
+        openai: {
+            mode: "Built-in",
+            endpoint: "",
+            apiKey: "",
+            model: "",
+        },
+    },
 };
 
 type ChatProviderConfigContextType = {
@@ -38,36 +81,19 @@ type ChatProviderConfigContextType = {
 const ChatProviderConfigContext = createContext<ChatProviderConfigContextType | undefined>(undefined);
 
 export const ChatProviderConfigProvider = ({ children }: { children: ReactNode }) => {
-    const [providerConfig, setProviderConfig] = useState<ProviderConfig>({
-        selectedProvider: "Azure OpenAI",
-        config: {
-            azure: {
-                endpoint: "",
-                apiKey: "",
-                model: "",
-                apiVersion: "",
-            },
-            ollama: {
-                type: "",
-                endpoint: "",
-                apiKey: "",
-                model: "",
-            },
-            claude: {
-                endpoint: "",
-                apiKey: "",
-                model: "",
-            },
-            openai: {
-                endpoint: "",
-                apiKey: "",
-                model: "",
-            },
-        },
-    });
+    const [providerConfig, setProviderConfig] = useState<ProviderConfig>(defaultProviderConfig);
+
+    useEffect(() => {
+        const sessionCookie = decodeURIComponent(Cookies.get("chatProviderConfig") || "");
+        if (sessionCookie) {
+            setProviderConfig(JSON.parse(sessionCookie));
+        } else {
+            setProviderConfig(defaultProviderConfig);
+        }
+    }, []);
 
     return (
-        <ChatProviderConfigContext.Provider value={{ providerConfig: providerConfig, setProviderConfig: setProviderConfig }}>
+        <ChatProviderConfigContext.Provider value={{ providerConfig, setProviderConfig }}>
             {children}
         </ChatProviderConfigContext.Provider>
     );

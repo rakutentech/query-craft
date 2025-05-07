@@ -8,19 +8,17 @@ export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const id = parseInt(params.id, 10);
-
-  if (isNaN(id)) {
-    return NextResponse.json({ error: 'Invalid connection ID' }, { status: 400 });
-  }
-
   try {
-    await deleteDatabaseConnection(id, session.user.id);
+    const session = await getServerSession(authOptions);
+    const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (session?.user?.id || 'anonymous') : 'anonymous';
+
+    const id = parseInt(params.id, 10);
+
+    if (isNaN(id)) {
+      return NextResponse.json({ error: 'Invalid connection ID' }, { status: 400 });
+    }
+
+    await deleteDatabaseConnection(id, userId);
     return NextResponse.json({ message: 'Connection deleted successfully' }, { status: 200 });
   } catch (error) {
     console.error('Error deleting connection:', error);

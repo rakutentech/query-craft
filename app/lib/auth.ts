@@ -1,6 +1,7 @@
 import { NextAuthOptions } from "next-auth";
 import GithubProvider from "next-auth/providers/github";
 import { storeUser } from "@/app/lib/db";
+import { getServerSession } from "next-auth/next";
 
 export const authOptions: NextAuthOptions = {
   providers: process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? [
@@ -8,13 +9,13 @@ export const authOptions: NextAuthOptions = {
       clientId: process.env.GITHUB_ID as string,
       clientSecret: process.env.GITHUB_SECRET as string,
       authorization: {
-        url: `${process.env.GITHUB_ENTERPRISE_URL}/login/oauth/authorize`,
+        url: `${process.env.OAUTH_GITHUB_ENTERPRISE_URL}/login/oauth/authorize`,
         params: { scope: "read:user user:email" }
       },
       token: {
-        url: `${process.env.GITHUB_ENTERPRISE_URL}/login/oauth/access_token`,
+        url: `${process.env.OAUTH_GITHUB_ENTERPRISE_URL}/login/oauth/access_token`,
         async request({ params, provider }) {
-          const response = await fetch(`${process.env.GITHUB_ENTERPRISE_URL}/login/oauth/access_token`, {
+          const response = await fetch(`${process.env.OAUTH_GITHUB_ENTERPRISE_URL}/login/oauth/access_token`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
@@ -32,9 +33,9 @@ export const authOptions: NextAuthOptions = {
         }
       },
       userinfo: {
-        url: `${process.env.GITHUB_ENTERPRISE_URL}/api/v3/user`,
+        url: `${process.env.OAUTH_GITHUB_ENTERPRISE_URL}/api/v3/user`,
         async request({ tokens }) {
-          return await fetch(`${process.env.GITHUB_ENTERPRISE_URL}/api/v3/user`, {
+          return await fetch(`${process.env.OAUTH_GITHUB_ENTERPRISE_URL}/api/v3/user`, {
             headers: {
               Authorization: `token ${tokens.access_token}`,
               'User-Agent': 'QueryCraft',
@@ -76,4 +77,19 @@ export const authOptions: NextAuthOptions = {
     },
   },
   debug: process.env.NODE_ENV === 'development',
-}; 
+};
+
+export async function checkUserSession() {
+  if (process.env.NEXT_PUBLIC_ENABLE_OAUTH !== 'true') {
+    return {
+      isAuthenticated: true,
+      userId: 'anonymous'
+    };
+  }
+  
+  const session = await getServerSession(authOptions);
+  return {
+    isAuthenticated: !!session?.user?.id,
+    userId: session?.user?.id
+  };
+} 

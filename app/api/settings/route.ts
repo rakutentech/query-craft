@@ -1,30 +1,16 @@
 // app/api/settings/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getSettings, saveSettings, getDatabaseConnections, saveDatabaseConnection, deleteDatabaseConnection, testDatabaseConnection } from '@/app/lib/db';
+import { getSettings, saveSettings, getDatabaseConnections, saveDatabaseConnection, deleteDatabaseConnection, testDatabaseConnection, DatabaseConnection } from '@/app/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/lib/auth';
-
-interface DatabaseConnection {
-  id?: number;
-  projectName: string;
-  dbDriver: string;
-  dbHost: string;
-  dbPort: string;
-  dbUsername: string;
-  dbPassword: string;
-  dbName: string;
-  schema: string;
-}
 
 export async function GET() {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (session?.user?.id || 'anonymous') : 'anonymous';
 
-    const settings = await getSettings(session.user.id);
-    const databaseConnections = await getDatabaseConnections(session.user.id);
+    const settings = await getSettings();
+    const databaseConnections = await getDatabaseConnections(userId);
     return NextResponse.json({ settings, databaseConnections });
   } catch (error) {
     console.error("Error fetching settings:", error);
@@ -35,9 +21,7 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (session?.user?.id || 'anonymous') : 'anonymous';
 
     const data = await request.json();
     const { aiSettings, databaseConnections } = data;
@@ -54,11 +38,11 @@ export async function POST(request: NextRequest) {
     }
 
     // Save general settings
-    await saveSettings({ ...aiSettings, user_id: session.user.id });
+    await saveSettings(aiSettings.systemPrompt);
 
     // Save or update database connections
     for (const connection of databaseConnections) {
-      await saveDatabaseConnection(connection, session.user.id);
+      await saveDatabaseConnection(connection, userId);
     }
 
     return NextResponse.json({ message: 'Settings saved successfully' });
@@ -71,12 +55,10 @@ export async function POST(request: NextRequest) {
 export async function DELETE(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (session?.user?.id || 'anonymous') : 'anonymous';
 
     const { id } = await request.json();
-    await deleteDatabaseConnection(id, session.user.id);
+    await deleteDatabaseConnection(id, userId);
     return NextResponse.json({ message: 'Database connection deleted successfully' });
   } catch (error) {
     console.error("Error deleting database connection:", error);
@@ -87,9 +69,7 @@ export async function DELETE(request: NextRequest) {
 export async function PUT(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (session?.user?.id || 'anonymous') : 'anonymous';
 
     const connection = await request.json();
     const isValid = await testDatabaseConnection(connection);

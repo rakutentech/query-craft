@@ -30,6 +30,8 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import ChatProviderConfig from "@/components/config/ChatProviderConfig";
+import {useChatProviderConfig} from "@/app/context/ChatProviderConfigContext";
+import Cookies from "js-cookie";
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 
 interface DatabaseConnection {
@@ -42,6 +44,7 @@ interface DatabaseConnection {
   dbPassword: string;
   dbName: string;
   schema: string;
+  tag?: string;
 }
 
 interface Settings {
@@ -116,6 +119,8 @@ export default function SettingsPage() {
     null
   );
   const router = useRouter();
+  const { providerConfig } = useChatProviderConfig(); // Access providerConfig
+
 
   useEffect(() => {
     fetchSettings();
@@ -123,7 +128,7 @@ export default function SettingsPage() {
   }, []);
 
   const RequiredLabel = ({ htmlFor, children }: { htmlFor: string, children: React.ReactNode }) => (
-    <Label htmlFor={htmlFor} className="flex items-center">
+    <Label htmlFor={htmlFor} className="flex items-center mb-2">
       {children} <span className="text-red-500 ml-1">*</span>
     </Label>
   );
@@ -308,6 +313,15 @@ export default function SettingsPage() {
         }
       }
 
+      // Save configuration to cookies
+      const encodedConfig = encodeURIComponent(JSON.stringify(providerConfig));
+      Cookies.set("chatProviderConfig", encodedConfig, {
+        path: "/",
+        expires: 1 / 24, // 1 hour
+        secure: true,
+        sameSite: "strict",
+      });
+
       // Save all settings if all tests pass
       const response = await fetch(`${BASE_PATH}/api/settings`, {
         method: "POST",
@@ -363,8 +377,8 @@ export default function SettingsPage() {
 
   return (
     <div className="container mx-auto py-8 px-4">
-      <h1 className="text-3xl font-bold mb-6 text-gray-800">
-        QueryCraft Settings
+      <h1 className="text-2xl font-bold mb-6 text-gray-800">
+        Settings
       </h1>
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
@@ -388,14 +402,14 @@ export default function SettingsPage() {
       </AlertDialog>
       <div className="space-y-6">
         <Card>
-          <CardHeader>System Prompt</CardHeader>
+          <CardHeader className="font-bold">System Prompt</CardHeader>
           <CardContent>
             <Textarea
               name="systemPrompt"
               value={settings.aiSettings.systemPrompt}
               onChange={handleInputChange}
               placeholder="Enter system prompt for AI"
-              rows={20}
+              rows={10}
             />
             <p className="text-sm text-gray-500 mt-2">
               This prompt guides the AI in generating SQL queries. Be specific
@@ -404,7 +418,7 @@ export default function SettingsPage() {
           </CardContent>
         </Card>
         <Card className="mt-6">
-          <CardHeader>Chat Service Configuration</CardHeader>
+          <CardHeader className="font-bold">LLMs</CardHeader>
           <CardContent>
             <ChatProviderConfig/>
           </CardContent>
@@ -558,16 +572,24 @@ export default function SettingsPage() {
                         handleDatabaseInputChange(index, "dbName", e.target.value.trim())
                       }
                       placeholder="Enter database name"
-                      required
                     />
-                    {formErrors[`dbName-${index}`] && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {formErrors[`dbName-${index}`]}
-                      </p>
-                    )}
                   </div>
                   <div>
-                    <Label htmlFor={`schema-${index}`}>Schema</Label>
+                    <Label htmlFor={`tag-${index}`}>Tags</Label>
+                    <Input
+                      id={`tag-${index}`}
+                      value={connection.tag || ''}
+                      onChange={(e) =>
+                        handleDatabaseInputChange(index, "tag", e.target.value)
+                      }
+                      placeholder="Enter tags (comma-separated)"
+                    />
+                    <p className="text-sm text-gray-500 mt-1">
+                      Separate multiple tags with commas
+                    </p>
+                  </div>
+                  <div>
+                    <Label htmlFor={`schema-${index}`} className="mb-2">Schema</Label>
                     <Textarea
                       id={`schema-${index}`}
                       value={connection.schema}
@@ -575,6 +597,7 @@ export default function SettingsPage() {
                         handleDatabaseInputChange(index, "schema", e.target.value.trim())
                       }
                       placeholder="Database schema will be displayed here after testing the connection"
+                      disabled
                       rows={10}
                     />
                   </div>
@@ -589,12 +612,12 @@ export default function SettingsPage() {
                       {testConnectionResult[index]}
                     </p>
                   )}
-                  <div className="flex justify-end">
+                  <div className="">
                     <Button
                       onClick={() => testAndSaveConnection(index)}
-                      className="mt-4"
+                      className="float-right text-sm font-medium text-gray-900 focus:outline-none bg-white rounded-full border border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-4 focus:ring-gray-100"
                     >
-                      Test and Get Schema
+                      Test
                     </Button>
                   </div>
                 </CardContent>
@@ -608,12 +631,12 @@ export default function SettingsPage() {
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-        <Button onClick={addDatabaseConnection} className="w-full">
+        <Button onClick={addDatabaseConnection} className="w-full bg-gray-500 hover:bg-gray-600">
         <PlusCircle className="mr-2 h-4 w-4" /> Add Database Connection
         </Button>
         <div className="flex justify-end space-x-4">
           <Button variant="outline" onClick={() => router.push("/")}>Cancel</Button>
-          <Button onClick={handleSave} disabled={isSaving}>
+          <Button onClick={handleSave} disabled={isSaving} className="bg-green-600 hover:bg-green-700">
             {isSaving ? <Spinner /> : "Save Settings"}
           </Button>
         </div>

@@ -7,9 +7,7 @@ import { authOptions } from '@/app/lib/auth';
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (session?.user?.id || 'anonymous') : 'anonymous';
 
     const { connectionId, query, sql } = await request.json();
 
@@ -20,7 +18,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    await addToHistory(connectionId, query, sql, session.user.id);
+    await addToHistory(connectionId, query, sql, userId);
 
     return NextResponse.json(
       { message: 'History saved successfully' },
@@ -39,9 +37,7 @@ export async function POST(request: NextRequest) {
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (session?.user?.id || 'anonymous') : 'anonymous';
 
     const { searchParams } = new URL(request.url);
     const connectionId = searchParams.get('connectionId');
@@ -53,7 +49,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const history = await getHistory(parseInt(connectionId, 10), session.user.id);
+    const history = await getHistory(parseInt(connectionId, 10), userId);
 
     return NextResponse.json(history, { status: 200 });
   } catch (error) {

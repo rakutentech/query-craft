@@ -6,7 +6,7 @@ import {
   getConversationMessages,
   updateConversationTitle,
   getSettings,
-  getDatabaseConnections
+  getUserConnectionById
 } from "@/app/lib/db";
 import {Message} from "ollama";
 import {generateOllamaChatResponse} from "@/app/lib/ollama";
@@ -17,13 +17,13 @@ import { authOptions } from '@/app/lib/auth';
 import {Anthropic} from "@anthropic-ai/sdk";
 import {generateClaudeChatResponse} from "@/app/lib/claude";
 import {generateOpenAIChatResponse} from "@/app/lib/openai";
+import {generateLMStudioChatResponse} from "@/app/lib/lm-studio";
+import {Chat, ChatInput, ChatMessageInput} from "@lmstudio/sdk";
 
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    }
+    const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (session?.user?.id || 'anonymous') : 'anonymous';
 
     const { query, providerConfig: providerConfig, conversationId, connectionId } = await request.json();
 
@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       currentConversationId = await createConversation(
         query.substring(0, 20) + "...",
         connectionId,
-        session.user.id
+        userId
       );
     }
 
@@ -52,9 +52,8 @@ export async function POST(request: NextRequest) {
     );
 
     // Get settings and database connections
-    const settings = await getSettings(session.user.id);
-    const connections = await getDatabaseConnections(session.user.id);
-    const currentConnection = connections.find(conn => conn.id === connectionId);
+    const settings = await getSettings();
+    const currentConnection = await getUserConnectionById(connectionId, userId);
 
     if (!currentConnection) {
       return NextResponse.json(
@@ -104,6 +103,22 @@ export async function POST(request: NextRequest) {
         ];
 
         aiResponse = await generateOllamaChatResponse(providerConfig.config.ollama, ollamaMessages);
+        break;
+      case "LM Studio":
+        console.log("LM Studio config", providerConfig.config.lmStudio);
+        // Prepare messages for LM Studio
+        const lmStudioMessages = [
+          { role: "system", content: fullSystemPrompt },
+          ...conversationHistory.map(
+              (msg) =>
+                  ({
+                    role: msg.sender === "user" ? "user" : "assistant",
+                    content: msg.content
+                  })
+          )
+        ];
+        // Generate response from LM Studio
+        aiResponse = await generateLMStudioChatResponse(providerConfig.config.lmStudio, lmStudioMessages as ChatInput);
         break;
       case "Claude":
         console.log("Claude config", providerConfig.config.claude);

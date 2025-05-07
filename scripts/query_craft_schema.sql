@@ -65,17 +65,17 @@ CREATE TABLE IF NOT EXISTS messages (
     content TEXT,
     sender ENUM('user', 'system'),
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_conversation_messages (conversationId)
+    share_token VARCHAR(255) UNIQUE,
+    INDEX idx_conversation_messages (conversationId),
+    INDEX idx_share_token (share_token)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create settings table
 CREATE TABLE IF NOT EXISTS settings (
     id INT PRIMARY KEY CHECK (id = 1),
-    user_id VARCHAR(255) NOT NULL,
     systemPrompt TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-    INDEX idx_user_settings (user_id)
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create database_connections table with user_id
@@ -90,6 +90,7 @@ CREATE TABLE IF NOT EXISTS database_connections (
     dbPassword TEXT,
     dbName TEXT,
     `schema` TEXT,
+    tag TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user_connections (user_id)

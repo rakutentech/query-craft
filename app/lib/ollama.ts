@@ -29,3 +29,17 @@ export async function generateOllamaChatResponse(ollamaConfig: any, messages: Me
         throw new Error("Failed to generate response from AI.");
     }
 }
+
+export async function getOllamaModelList(endpoint: string): Promise<string[]> {
+    const ollamaClient = new Ollama({
+        host: endpoint || 'http://localhost:11434',
+    });
+
+    try {
+        const response = await ollamaClient.list();
+        return response.models.map((model: { name: string }) => model.name);
+    } catch (error) {
+        console.error("Error fetching Ollama model list via SDK:", error);
+        throw new Error("Failed to fetch Ollama model list.");
+    }
+}
