@@ -3,7 +3,9 @@ import { OpenAI } from "openai";
 
 export async function generateOpenAIChatResponse(openaiConfig: any, messages:  OpenAI.Chat.Completions.ChatCompletionMessageParam[]): Promise<string> {
     try {
-        const { endpoint, apiKey, model } = openaiConfig;
+        const apiKey = openaiConfig.mode === "Built-in" ? process.env.OPENAI_API_KEY : openaiConfig.apiKey;
+        const endpoint = openaiConfig.mode === "Built-in" ? process.env.OPENAI_ENDPOINT : openaiConfig.endpoint;
+        const model = openaiConfig.mode === "Built-in" ? process.env.OPENAI_MODEL : openaiConfig.model;
 
         const openai = new OpenAI({
             apiKey: apiKey,

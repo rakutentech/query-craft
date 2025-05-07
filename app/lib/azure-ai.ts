@@ -6,11 +6,16 @@ const proxyURL = process.env.PROXY_URL!;
 
 export async function generateAzureChatResponse(azureConfig: any, messages: OpenAI.Chat.ChatCompletionMessageParam[]): Promise<string> {
   try {
+    const apiKey = azureConfig.mode === "Built-in" ? process.env.AZURE_OPENAI_API_KEY : azureConfig.apiKey;
+    const endpoint = azureConfig.mode === "Built-in" ? process.env.AZURE_OPENAI_ENDPOINT : azureConfig.endpoint;
+    const model = azureConfig.mode === "Built-in" ? process.env.AZURE_OPENAI_DEPLOYMENT_ID : azureConfig.model;
+    const apiVersion = azureConfig.mode === "Built-in" ? process.env.AZURE_OPENAI_API_VERSION : azureConfig.apiVersion;
+
     let clientOptions: ClientOptions = {
-      apiKey: azureConfig.apiKey,
-      baseURL: `${azureConfig.endpoint}/openai/deployments/${azureConfig.model}`,
-      defaultQuery: { 'api-version': azureConfig.apiVersion || '2024-06-01' },
-      defaultHeaders: { 'api-key': azureConfig.apiKey },
+      apiKey: apiKey,
+      baseURL: `${endpoint}/openai/deployments/${model}`,
+      defaultQuery: { 'api-version': apiVersion },
+      defaultHeaders: { 'api-key': apiKey },
       httpAgent: proxyURL ? new HttpsProxyAgent(proxyURL) : undefined,
       timeout: 6000
     }
@@ -18,7 +23,7 @@ export async function generateAzureChatResponse(azureConfig: any, messages: Open
     const openai = new OpenAI(clientOptions);
 
     const completion = await openai.chat.completions.create({
-      model: azureConfig.model,
+      model: model,
       messages: messages,
     });
 
