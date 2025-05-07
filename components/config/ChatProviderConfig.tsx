@@ -72,7 +72,7 @@ function ChatProviderConfig() {
                 setOllamaModels(ollamaModelsCookie.split(','))
             }
             if (lmStudioModelsCookie) {
-                setOllamaModels(lmStudioModelsCookie.split(','))
+                setLMStudioModels(lmStudioModelsCookie.split(','))
             }
 
             // Fetch local Ollama models if the provider is Ollama and type is Local
@@ -115,7 +115,6 @@ function ChatProviderConfig() {
             }
 
             const data = await res.json();
-            console.log("Fetched Ollama models:", data.models)
             setOllamaModels(data.models || []);
 
             // Save models to cookies
@@ -143,15 +142,12 @@ function ChatProviderConfig() {
                 return;
             }
 
-            console.log("Fetching LM Studio models from endpoint:", endpoint);
-
             const res = await fetch(`/api/provider/lmstudio?endpoint=${encodeURIComponent(endpoint)}`);
             if (!res.ok) {
                 throw new Error("Failed to fetch LM Studio models.");
             }
 
             const data = await res.json();
-            console.log("Fetched LM Studio models:", data.models)
             setLMStudioModels(data.models || []);
 
             // Save models to cookies
@@ -193,7 +189,6 @@ function ChatProviderConfig() {
                     model: prevConfig.config.lmStudio?.model || "", // Retain model if already set
                 };
             }
-
             return updatedConfig;
         });
     };
@@ -231,15 +226,12 @@ function ChatProviderConfig() {
         setTestResult(null);
 
         try {
-            const { selectedProvider, config } = providerConfig;
-
-            let response;
-            if (selectedProvider === "Azure OpenAI") {
+            if (providerConfig.selectedProvider === "Azure OpenAI") {
                 const res = await fetch('/api/provider/azure', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        azureOpenAIConfig: config.azure,
+                        azureOpenAIConfig: providerConfig.config.azure,
                         messages: [{ role: "user", content: "Test message" }],
                     }),
                 });
@@ -247,14 +239,12 @@ function ChatProviderConfig() {
                     setTestResult("Connection failed. Please check your configuration.");
                     return;
                 }
-                const data = await res.json();
-                response = data.response;
-            } else if (selectedProvider === "Claude") {
+            } else if (providerConfig.selectedProvider === "Claude") {
                 const res = await fetch('/api/provider/claude', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        claudeConfig: config.claude,
+                        claudeConfig: providerConfig.config.claude,
                         systemPrompt: "Test system prompt",
                         messages: [{ role: "user", content: "Test message" }],
                     }),
@@ -263,14 +253,12 @@ function ChatProviderConfig() {
                     setTestResult("Connection failed. Please check your configuration.");
                     return;
                 }
-                const data = await res.json();
-                response = data.response;
-            } else if (selectedProvider === "Ollama") {
+            } else if (providerConfig.selectedProvider === "Ollama") {
                 const res = await fetch('/api/provider/ollama', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        ollamaConfig: config.ollama,
+                        ollamaConfig: providerConfig.config.ollama,
                         messages: [{ role: "user", content: "Test message" }],
                     }),
                 });
@@ -278,14 +266,12 @@ function ChatProviderConfig() {
                     setTestResult("Connection failed. Please check your configuration.");
                     return;
                 }
-                const data = await res.json();
-                response = data.response;
-            } else if (selectedProvider === "LM Studio") {
+            } else if (providerConfig.selectedProvider === "LM Studio") {
                 const res = await fetch('/api/provider/lmstudio', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        lmStudioConfig: config.lmStudio,
+                        lmStudioConfig: providerConfig.config.lmStudio,
                         messages: [{ role: "user", content: "Test message" }],
                     }),
                 });
@@ -293,14 +279,12 @@ function ChatProviderConfig() {
                     setTestResult("Connection failed. Please check your configuration.");
                     return;
                 }
-                const data = await res.json();
-                response = data.response;
-            } else if (selectedProvider === "OpenAI") {
+            } else if (providerConfig.selectedProvider === "OpenAI") {
                 const res = await fetch('/api/provider/openai', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        openaiConfig: config.openai,
+                        openaiConfig: providerConfig.config.openai,
                         messages: [{ role: "user", content: "Test message" }],
                     }),
                 });
@@ -308,13 +292,11 @@ function ChatProviderConfig() {
                     setTestResult("Connection failed. Please check your configuration.");
                     return;
                 }
-                const data = await res.json();
-                response = data.response;
             } else {
                 throw new Error("Testing is not supported for the selected provider.");
             }
 
-            setTestResult(`Connection successful: ${response}`);
+            setTestResult(`Connection successful`);
         } catch (error) {
             console.error("Test connection failed:", error);
             setTestResult("Connection failed. Please check your configuration.");
@@ -349,347 +331,402 @@ function ChatProviderConfig() {
             {providerConfig.selectedProvider === "Azure OpenAI" && (
                 <CardContent className="space-y-4">
                     <div>
-                        <RequiredLabel htmlFor="azure-endpoint">Endpoint</RequiredLabel>
-                        <Input
-                            id="azure-endpoint"
-                            value={providerConfig.config.azure?.endpoint}
-                            onChange={(e) => handleInputChange("azure", "endpoint", e.target.value)}
-                            placeholder="e.g., https://your-azure-endpoint.com"
-                            className="mt-3 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                            required
-                        />
-                        {formErrors["azure-endpoint"] && (
-                            <p className="text-red-500 text-sm mt-1">
-                                {formErrors["azure-endpoint"]}
-                            </p>
-                        )}
+                        <label htmlFor="config-mode" className="block text-sm font-medium text-gray-700 mb-2">
+                            Configuration Mode:
+                        </label>
+                        <select
+                            id="config-mode"
+                            value={providerConfig.config.azure.mode}
+                            onChange={(e) => handleInputChange("azure", "mode", e.target.value as "Built-in" | "Custom")}
+                            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 mt-2"
+                        >
+                            <option value="Built-in">Built-in</option>
+                            <option value="Custom">Custom</option>
+                        </select>
                     </div>
-                    <div>
-                        <RequiredLabel htmlFor="azure-api-key">API Key</RequiredLabel>
-                        <Input
-                            id="azure-api-key"
-                            value={providerConfig.config.azure?.apiKey}
-                            onChange={(e) => handleInputChange("azure", "apiKey", e.target.value)}
-                            placeholder="Enter your Azure API Key"
-                            className="mt-3 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                            required
-                        />
-                        {formErrors["azure-api-key"] && (
-                            <p className="text-red-500 text-sm mt-1">
-                                {formErrors["azure-api-key"]}
-                            </p>
-                        )}
-                    </div>
-                    <div>
-                        <RequiredLabel htmlFor="azure-deployment-id">Deployment ID</RequiredLabel>
-                        <Input
-                            id="azure-deployment-id"
-                            value={providerConfig.config.azure?.model}
-                            onChange={(e) => handleInputChange("azure", "model", e.target.value)}
-                            placeholder="Enter your Deployment ID"
-                            className="mt-3 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                            required
-                        />
-                        {formErrors["azure-deployment-id"] && (
-                            <p className="text-red-500 text-sm mt-1">
-                                {formErrors["azure-deployment-id"]}
-                            </p>
-                        )}
-                    </div>
-                    <div>
-                        <RequiredLabel htmlFor="azure-api-version">API Version</RequiredLabel>
-                        <Input
-                            id="azure-api-version"
-                            value={providerConfig.config.azure?.apiVersion}
-                            onChange={(e) => handleInputChange("azure", "apiVersion", e.target.value)}
-                            placeholder="e.g., 2024-06-01"
-                            className="mt-3 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                            required
-                        />
-                        {formErrors["azure-api-version"] && (
-                            <p className="text-red-500 text-sm mt-1">
-                                {formErrors["azure-api-version"]}
-                            </p>
-                        )}
-                    </div>
+                    {providerConfig.config.azure.mode != "Built-in" && (
+                        <>
+                            <div>
+                                <RequiredLabel htmlFor="azure-endpoint">Endpoint</RequiredLabel>
+                                <Input
+                                    id="azure-endpoint"
+                                    value={providerConfig.config.azure?.endpoint}
+                                    onChange={(e) => handleInputChange("azure", "endpoint", e.target.value)}
+                                    placeholder="e.g., https://your-azure-endpoint.com"
+                                    className="mt-3 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                    required
+                                />
+                                {formErrors["azure-endpoint"] && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        {formErrors["azure-endpoint"]}
+                                    </p>
+                                )}
+                            </div>
+                            <div>
+                                <RequiredLabel htmlFor="azure-api-key">API Key</RequiredLabel>
+                                <Input
+                                    id="azure-api-key"
+                                    value={providerConfig.config.azure?.apiKey}
+                                    onChange={(e) => handleInputChange("azure", "apiKey", e.target.value)}
+                                    placeholder="Enter your Azure API Key"
+                                    className="mt-3 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                    required
+                                />
+                                {formErrors["azure-api-key"] && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        {formErrors["azure-api-key"]}
+                                    </p>
+                                )}
+                            </div>
+                            <div>
+                                <RequiredLabel htmlFor="azure-deployment-id">Deployment ID</RequiredLabel>
+                                <Input
+                                    id="azure-deployment-id"
+                                    value={providerConfig.config.azure?.model}
+                                    onChange={(e) => handleInputChange("azure", "model", e.target.value)}
+                                    placeholder="Enter your Deployment ID"
+                                    className="mt-3 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                    required
+                                />
+                                {formErrors["azure-deployment-id"] && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        {formErrors["azure-deployment-id"]}
+                                    </p>
+                                )}
+                            </div>
+                            <div>
+                                <RequiredLabel htmlFor="azure-api-version">API Version</RequiredLabel>
+                                <Input
+                                    id="azure-api-version"
+                                    value={providerConfig.config.azure?.apiVersion}
+                                    onChange={(e) => handleInputChange("azure", "apiVersion", e.target.value)}
+                                    placeholder="e.g., 2024-06-01"
+                                    className="mt-3 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                    required
+                                />
+                                {formErrors["azure-api-version"] && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        {formErrors["azure-api-version"]}
+                                    </p>
+                                )}
+                            </div>
+                        </>
+                    )}
                 </CardContent>
             )}
 
             {providerConfig.selectedProvider === "Ollama" && (
                 <CardContent className="space-y-4">
-                    <div>
-                        <label htmlFor="ollama-type" className="block text-sm font-medium text-gray-700 mb-2">
-                            Ollama Type:
-                        </label>
-                        <select
-                            id="ollama-type"
-                            value={providerConfig.config.ollama?.type || "Local"}
-                            onChange={(e) => handleOllamaTypeChange(e.target.value as "Local" | "Remote")}
-                            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 mt-2"
-                        >
-                            <option value="Local">Local</option>
-                            <option value="Remote">Remote</option>
-                        </select>
-                    </div>
-
-                    {providerConfig.config.ollama?.type === "Local" && (
-                        <>
                             <div>
-                                <RequiredLabel htmlFor="ollama-endpoint">Endpoint</RequiredLabel>
-                                <Input
-                                    id="ollama-endpoint"
-                                    className="mt-3"
-                                    value={providerConfig.config.ollama?.endpoint || "http://localhost:11434"}
-                                    onChange={(e) => handleInputChange("ollama", "endpoint", e.target.value)}
-                                    onBlur={() => {
-                                        if (
-                                            providerConfig.selectedProvider === "Ollama" &&
-                                            providerConfig.config.ollama?.type === "Local" &&
-                                            providerConfig.config.ollama?.endpoint
-                                        ) {
-                                            fetchOllamaModels();
-                                        }
-                                    }}
-                                    placeholder="Enter Ollama Endpoint"
-                                    required
-                                />
-                                {formErrors["ollama-endpoint"] && (
-                                    <p className="text-red-500 text-sm mt-1">
-                                        {formErrors["ollama-endpoint"]}
-                                    </p>
-                                )}
-                            </div>
-                            <div>
-                                <RequiredLabel htmlFor="ollama-model">Ollama Model</RequiredLabel>
+                                <label htmlFor="ollama-type" className="block text-sm font-medium text-gray-700 mb-2">
+                                    Ollama Type:
+                                </label>
                                 <select
-                                    id="ollama-model"
-                                    value={providerConfig.config.ollama?.model || ""}
-                                    onChange={(e) => handleInputChange("ollama", "model", e.target.value)}
+                                    id="ollama-type"
+                                    value={providerConfig.config.ollama?.type || "Local"}
+                                    onChange={(e) => handleOllamaTypeChange(e.target.value as "Local" | "Remote")}
                                     className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 mt-2"
-                                    required
                                 >
-                                    <option value="" disabled>
-                                        Select a model
-                                    </option>
-                                    {ollamaModels.map((model) => (
-                                        <option key={model} value={model}>
-                                            {model}
-                                        </option>
-                                    ))}
+                                    <option value="Local">Local</option>
+                                    <option value="Remote">Remote</option>
                                 </select>
-                                {formErrors["ollama-model"] && (
-                                    <p className="text-red-500 text-sm mt-1">
-                                        {formErrors["ollama-model"]}
-                                    </p>
-                                )}
-                            </div>
-                        </>
-                    )}
-
-                    {providerConfig.config.ollama?.type === "Remote" && (
-                        <>
-                            <div>
-                                <RequiredLabel htmlFor="ollama-endpoint">Endpoint</RequiredLabel>
-                                <Input
-                                    id="ollama-endpoint"
-                                    value={providerConfig.config.ollama?.endpoint || ""}
-                                    onChange={(e) => handleInputChange("ollama", "endpoint", e.target.value)}
-                                    placeholder="Enter Ollama Endpoint"
-                                    required
-                                />
-                                {formErrors["ollama-endpoint"] && (
-                                    <p className="text-red-500 text-sm mt-1">
-                                        {formErrors["ollama-endpoint"]}
-                                    </p>
-                                )}
-                            </div>
-                            <div>
-                                <RequiredLabel htmlFor="ollama-api-key">API Key</RequiredLabel>
-                                <Input
-                                    id="ollama-api-key"
-                                    value={providerConfig.config.ollama?.apiKey || ""}
-                                    onChange={(e) => handleInputChange("ollama", "apiKey", e.target.value)}
-                                    placeholder="Enter Ollama API Key"
-                                    required
-                                />
-                                {formErrors["ollama-api-key"] && (
-                                    <p className="text-red-500 text-sm mt-1">
-                                        {formErrors["ollama-api-key"]}
-                                    </p>
-                                )}
                             </div>
 
-                            <div>
-                                <RequiredLabel htmlFor="ollama-model">Ollama Model</RequiredLabel>
-                                <Input
-                                    id="ollama-model"
-                                    value={providerConfig.config.ollama?.model || ""}
-                                    onChange={(e) => handleInputChange("ollama", "model", e.target.value)}
-                                    placeholder="Enter Ollama Model"
-                                    required
-                                />
-                                {formErrors["ollama-model"] && (
-                                    <p className="text-red-500 text-sm mt-1">
-                                        {formErrors["ollama-model"]}
-                                    </p>
-                                )}
-                            </div>
-                        </>
-                    )}
+                            {providerConfig.config.ollama?.type === "Local" && (
+                                <>
+                                    <div>
+                                        <RequiredLabel htmlFor="ollama-endpoint">Endpoint</RequiredLabel>
+                                        <Input
+                                            id="ollama-endpoint"
+                                            className="mt-3"
+                                            value={providerConfig.config.ollama?.endpoint || "http://localhost:11434"}
+                                            onChange={(e) => handleInputChange("ollama", "endpoint", e.target.value)}
+                                            onBlur={() => {
+                                                if (
+                                                    providerConfig.selectedProvider === "Ollama" &&
+                                                    providerConfig.config.ollama?.type === "Local" &&
+                                                    providerConfig.config.ollama?.endpoint
+                                                ) {
+                                                    fetchOllamaModels();
+                                                }
+                                            }}
+                                            placeholder="Enter Ollama Endpoint"
+                                            required
+                                        />
+                                        {formErrors["ollama-endpoint"] && (
+                                            <p className="text-red-500 text-sm mt-1">
+                                                {formErrors["ollama-endpoint"]}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <RequiredLabel htmlFor="ollama-model">Ollama Model</RequiredLabel>
+                                        <select
+                                            id="ollama-model"
+                                            value={providerConfig.config.ollama?.model || ""}
+                                            onChange={(e) => handleInputChange("ollama", "model", e.target.value)}
+                                            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 mt-2"
+                                            required
+                                        >
+                                            <option value="" disabled>
+                                                Select a model
+                                            </option>
+                                            {ollamaModels.map((model) => (
+                                                <option key={model} value={model}>
+                                                    {model}
+                                                </option>
+                                            ))}
+                                        </select>
+                                        {formErrors["ollama-model"] && (
+                                            <p className="text-red-500 text-sm mt-1">
+                                                {formErrors["ollama-model"]}
+                                            </p>
+                                        )}
+                                    </div>
+                                </>
+                            )}
+
+                            {providerConfig.config.ollama?.type === "Remote" && (
+                                <>
+                                    <div>
+                                        <RequiredLabel htmlFor="ollama-endpoint">Endpoint</RequiredLabel>
+                                        <Input
+                                            id="ollama-endpoint"
+                                            value={providerConfig.config.ollama?.endpoint || ""}
+                                            onChange={(e) => handleInputChange("ollama", "endpoint", e.target.value)}
+                                            placeholder="Enter Ollama Endpoint"
+                                            required
+                                        />
+                                        {formErrors["ollama-endpoint"] && (
+                                            <p className="text-red-500 text-sm mt-1">
+                                                {formErrors["ollama-endpoint"]}
+                                            </p>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <RequiredLabel htmlFor="ollama-api-key">API Key</RequiredLabel>
+                                        <Input
+                                            id="ollama-api-key"
+                                            value={providerConfig.config.ollama?.apiKey || ""}
+                                            onChange={(e) => handleInputChange("ollama", "apiKey", e.target.value)}
+                                            placeholder="Enter Ollama API Key"
+                                            required
+                                        />
+                                        {formErrors["ollama-api-key"] && (
+                                            <p className="text-red-500 text-sm mt-1">
+                                                {formErrors["ollama-api-key"]}
+                                            </p>
+                                        )}
+                                    </div>
+
+                                    <div>
+                                        <RequiredLabel htmlFor="ollama-model">Ollama Model</RequiredLabel>
+                                        <Input
+                                            id="ollama-model"
+                                            value={providerConfig.config.ollama?.model || ""}
+                                            onChange={(e) => handleInputChange("ollama", "model", e.target.value)}
+                                            placeholder="Enter Ollama Model"
+                                            required
+                                        />
+                                        {formErrors["ollama-model"] && (
+                                            <p className="text-red-500 text-sm mt-1">
+                                                {formErrors["ollama-model"]}
+                                            </p>
+                                        )}
+                                    </div>
+                                </>
+                            )}
                 </CardContent>
             )}
 
             {providerConfig.selectedProvider === "LM Studio" && (
                 <CardContent className="space-y-4">
-                    <div>
-                        <RequiredLabel htmlFor="lmstudio-endpoint">Endpoint</RequiredLabel>
-                        <Input
-                            id="lmstudio-endpoint"
-                            value={providerConfig.config.lmStudio?.endpoint || "http://localhost:1234"}
-                            onChange={(e) => handleInputChange("lmStudio", "endpoint", e.target.value)}
-                            onBlur={fetchLMStudioModels}
-                            placeholder="e.g., http://localhost:1234"
-                            className="mt-3 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                            required
-                        />
-                        {formErrors["lmstudio-endpoint"] && (
-                            <p className="text-red-500 text-sm mt-1">
-                                {formErrors["lmstudio-endpoint"]}
-                            </p>
-                        )}
-                    </div>
-                    <div>
-                        <RequiredLabel htmlFor="lmstudio-model">Model</RequiredLabel>
-                        <select
-                            id="lmstudio-model"
-                            value={providerConfig.config.lmStudio?.model || ""}
-                            onChange={(e) => handleInputChange("lmStudio", "model", e.target.value)}
-                            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 mt-2"
-                            required
-                        >
-                            <option value="" disabled>Select a model</option>
-                            {lmStudioModels.map((model) => (
-                                <option key={model} value={model}>
-                                    {model}
-                                </option>
-                            ))}
-                        </select>
-                        {formErrors["lmstudio-model"] && (
-                            <p className="text-red-500 text-sm mt-1">
-                                {formErrors["lmstudio-model"]}
-                            </p>
-                        )}
-                    </div>
+                            <div>
+                                <RequiredLabel htmlFor="lmstudio-endpoint">Endpoint</RequiredLabel>
+                                <Input
+                                    id="lmstudio-endpoint"
+                                    value={providerConfig.config.lmStudio?.endpoint || "http://localhost:1234"}
+                                    onChange={(e) => handleInputChange("lmStudio", "endpoint", e.target.value)}
+                                    onBlur={fetchLMStudioModels}
+                                    placeholder="e.g., http://localhost:1234"
+                                    className="mt-3 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                                    required
+                                />
+                                {formErrors["lmstudio-endpoint"] && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        {formErrors["lmstudio-endpoint"]}
+                                    </p>
+                                )}
+                            </div>
+                            <div>
+                                <RequiredLabel htmlFor="lmstudio-model">Model</RequiredLabel>
+                                <select
+                                    id="lmstudio-model"
+                                    value={providerConfig.config.lmStudio?.model || ""}
+                                    onChange={(e) => handleInputChange("lmStudio", "model", e.target.value)}
+                                    className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 mt-2"
+                                    required
+                                >
+                                    <option value="" disabled>Select a model</option>
+                                    {lmStudioModels.map((model) => (
+                                        <option key={model} value={model}>
+                                            {model}
+                                        </option>
+                                    ))}
+                                </select>
+                                {formErrors["lmstudio-model"] && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        {formErrors["lmstudio-model"]}
+                                    </p>
+                                )}
+                            </div>
                 </CardContent>
             )}
 
             {providerConfig.selectedProvider === "Claude" && (
                 <CardContent className="space-y-4">
                     <div>
-                        <RequiredLabel htmlFor="claude-endpoint">Endpoint</RequiredLabel>
-                        <Input
-                            id="claude-endpoint"
-                            value={providerConfig.config.claude?.endpoint}
-                            onChange={(e) => handleInputChange("claude", "endpoint", e.target.value)}
-                            placeholder="Enter Claude API Endpoint"
-                            required
-                        />
-                        {formErrors["claude-endpoint"] && (
-                            <p className="text-red-500 text-sm mt-1">
-                                {formErrors["claude-endpoint"]}
-                            </p>
-                        )}
+                        <label htmlFor="config-mode" className="block text-sm font-medium text-gray-700 mb-2">
+                            Configuration Mode:
+                        </label>
+                        <select
+                            id="config-mode"
+                            value={providerConfig.config.claude.mode}
+                            onChange={(e) => handleInputChange("claude", "mode", e.target.value as "Built-in" | "Custom")}
+                            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 mt-2"
+                        >
+                            <option value="Built-in">Built-in</option>
+                            <option value="Custom">Custom</option>
+                        </select>
                     </div>
-                    <div>
-                        <RequiredLabel htmlFor="claude-api-key">API Key</RequiredLabel>
-                        <Input
-                            id="claude-api-key"
-                            value={providerConfig.config.claude?.apiKey}
-                            onChange={(e) => handleInputChange("claude", "apiKey", e.target.value)}
-                            placeholder="Enter Claude API Key"
-                            required
-                        />
-                        {formErrors["claude-api-key"] && (
-                            <p className="text-red-500 text-sm mt-1">
-                                {formErrors["claude-api-key"]}
-                            </p>
-                        )}
-                    </div>
-                    <div>
-                        <RequiredLabel htmlFor="claude-model">Model</RequiredLabel>
-                        <Input
-                            id="claude-model"
-                            value={providerConfig.config.claude?.model}
-                            onChange={(e) => handleInputChange("claude", "model", e.target.value)}
-                            placeholder="Enter Claude Model"
-                            required
-                        />
-                        {formErrors["claude-model"] && (
-                            <p className="text-red-500 text-sm mt-1">
-                                {formErrors["claude-model"]}
-                            </p>
-                        )}
-                        <p className="text-sm text-gray-500 mt-1">
-                            See the full model list for Anthropic API <a
-                            href="https://docs.anthropic.com/en/docs/about-claude/models/all-models" target="_blank"
-                            rel="noopener noreferrer" className="text-blue-500 underline">here</a>.
-                        </p>
-                    </div>
+                    {providerConfig.config.claude.mode != "Built-in" && (
+                        <>
+                            <div>
+                                <RequiredLabel htmlFor="claude-endpoint">Endpoint</RequiredLabel>
+                                <Input
+                                    id="claude-endpoint"
+                                    value={providerConfig.config.claude?.endpoint}
+                                    onChange={(e) => handleInputChange("claude", "endpoint", e.target.value)}
+                                    placeholder="Enter Claude API Endpoint"
+                                    required
+                                />
+                                {formErrors["claude-endpoint"] && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        {formErrors["claude-endpoint"]}
+                                    </p>
+                                )}
+                            </div>
+                            <div>
+                                <RequiredLabel htmlFor="claude-api-key">API Key</RequiredLabel>
+                                <Input
+                                    id="claude-api-key"
+                                    value={providerConfig.config.claude?.apiKey}
+                                    onChange={(e) => handleInputChange("claude", "apiKey", e.target.value)}
+                                    placeholder="Enter Claude API Key"
+                                    required
+                                />
+                                {formErrors["claude-api-key"] && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        {formErrors["claude-api-key"]}
+                                    </p>
+                                )}
+                            </div>
+                            <div>
+                                <RequiredLabel htmlFor="claude-model">Model</RequiredLabel>
+                                <Input
+                                    id="claude-model"
+                                    value={providerConfig.config.claude?.model}
+                                    onChange={(e) => handleInputChange("claude", "model", e.target.value)}
+                                    placeholder="Enter Claude Model"
+                                    required
+                                />
+                                {formErrors["claude-model"] && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        {formErrors["claude-model"]}
+                                    </p>
+                                )}
+                                <p className="text-sm text-gray-500 mt-1">
+                                    See the full model list for Anthropic API <a
+                                    href="https://docs.anthropic.com/en/docs/about-claude/models/all-models"
+                                    target="_blank"
+                                    rel="noopener noreferrer" className="text-blue-500 underline">here</a>.
+                                </p>
+                            </div>
+                        </>
+                    )}
                 </CardContent>
             )}
 
             {providerConfig.selectedProvider === "OpenAI" && (
                 <CardContent className="space-y-4">
                     <div>
-                        <RequiredLabel htmlFor="openai-endpoint">Endpoint</RequiredLabel>
-                        <Input
-                            id="openai-endpoint"
-                            value={providerConfig.config.openai?.endpoint}
-                            onChange={(e) => handleInputChange("openai", "endpoint", e.target.value)}
-                            placeholder="Enter OpenAI Endpoint"
-                            required
-                        />
-                        {formErrors["openai-endpoint"] && (
-                            <p className="text-red-500 text-sm mt-1">
-                                {formErrors["openai-endpoint"]}
-                            </p>
-                        )}
+                        <label htmlFor="config-mode" className="block text-sm font-medium text-gray-700 mb-2">
+                            Configuration Mode:
+                        </label>
+                        <select
+                            id="config-mode"
+                            value={providerConfig.config.openai.mode}
+                            onChange={(e) => handleInputChange("openai", "mode", e.target.value as "Built-in" | "Custom")}
+                            className="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2 mt-2"
+                        >
+                            <option value="Built-in">Built-in</option>
+                            <option value="Custom">Custom</option>
+                        </select>
                     </div>
-                    <div>
-                        <RequiredLabel htmlFor="openai-api-key">API Key</RequiredLabel>
-                        <Input
-                            id="openai-api-key"
-                            value={providerConfig.config.openai?.apiKey}
-                            onChange={(e) => handleInputChange("openai", "apiKey", e.target.value)}
-                            placeholder="Enter OpenAI API Key"
-                            required
-                        />
-                        {formErrors["openai-api-key"] && (
-                            <p className="text-red-500 text-sm mt-1">
-                                {formErrors["openai-api-key"]}
-                            </p>
-                        )}
-                    </div>
-                    <div>
-                        <RequiredLabel htmlFor="openai-model">Model</RequiredLabel>
-                        <Input
-                            id="openai-model"
-                            value={providerConfig.config.openai?.model}
-                            onChange={(e) => handleInputChange("openai", "model", e.target.value)}
-                            placeholder="Enter OpenAI Model"
-                            required
-                        />
-                        {formErrors["openai-model"] && (
-                            <p className="text-red-500 text-sm mt-1">
-                                {formErrors["openai-model"]}
-                            </p>
-                        )}
-                        <p className="text-sm text-gray-500 mt-1">
-                            Check how to get model list from <a
-                            href="https://platform.openai.com/docs/api-reference/models/list" target="_blank"
-                            rel="noopener noreferrer" className="text-blue-500 underline">here</a>.
-                        </p>
-                    </div>
+                    {providerConfig.config.openai.mode != "Built-in" && (
+                        <>
+                            <div>
+                                <RequiredLabel htmlFor="openai-endpoint">Endpoint</RequiredLabel>
+                                <Input
+                                    id="openai-endpoint"
+                                    value={providerConfig.config.openai?.endpoint}
+                                    onChange={(e) => handleInputChange("openai", "endpoint", e.target.value)}
+                                    placeholder="Enter OpenAI Endpoint"
+                                    required
+                                />
+                                {formErrors["openai-endpoint"] && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        {formErrors["openai-endpoint"]}
+                                    </p>
+                                )}
+                            </div>
+                            <div>
+                                <RequiredLabel htmlFor="openai-api-key">API Key</RequiredLabel>
+                                <Input
+                                    id="openai-api-key"
+                                    value={providerConfig.config.openai?.apiKey}
+                                    onChange={(e) => handleInputChange("openai", "apiKey", e.target.value)}
+                                    placeholder="Enter OpenAI API Key"
+                                    required
+                                />
+                                {formErrors["openai-api-key"] && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        {formErrors["openai-api-key"]}
+                                    </p>
+                                )}
+                            </div>
+                            <div>
+                                <RequiredLabel htmlFor="openai-model">Model</RequiredLabel>
+                                <Input
+                                    id="openai-model"
+                                    value={providerConfig.config.openai?.model}
+                                    onChange={(e) => handleInputChange("openai", "model", e.target.value)}
+                                    placeholder="Enter OpenAI Model"
+                                    required
+                                />
+                                {formErrors["openai-model"] && (
+                                    <p className="text-red-500 text-sm mt-1">
+                                        {formErrors["openai-model"]}
+                                    </p>
+                                )}
+                                <p className="text-sm text-gray-500 mt-1">
+                                    Check how to get model list from <a
+                                    href="https://platform.openai.com/docs/api-reference/models/list" target="_blank"
+                                    rel="noopener noreferrer" className="text-blue-500 underline">here</a>.
+                                </p>
+                            </div>
+                        </>
+                    )}
                 </CardContent>
             )}
 
@@ -701,7 +738,7 @@ function ChatProviderConfig() {
                 >
                     {isTesting ? (
                         <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin"/>
                             Testing...
                         </>
                     ) : (

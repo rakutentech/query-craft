@@ -38,7 +38,6 @@ export async function getLMStudioModelList(endpoint: string): Promise<string[]> 
 
     try {
         const models = await lmStudioClient.system.listDownloadedModels();
-        console.log("LM Studio models fetched:", models);
         return models
             .filter((model: { type: string }) => model.type === 'llm')
             .map((model: { modelKey: string }) => model.modelKey);

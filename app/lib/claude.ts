@@ -11,7 +11,9 @@ class CustomAnthropic extends Anthropic {
 }
 
 export async function generateClaudeChatResponse(claudeConfig: any, systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): Promise<string> {
-    const { endpoint, apiKey, model } = claudeConfig;
+    const apiKey = claudeConfig.mode === "Built-in" ? process.env.CLAUDE_API_KEY : claudeConfig.apiKey;
+    const endpoint = claudeConfig.mode === "Built-in" ? process.env.CLAUDE_ENDPOINT : claudeConfig.endpoint;
+    const model = claudeConfig.mode === "Built-in" ? process.env.CLAUDE_MODEL : claudeConfig.model;
 
     if (!apiKey || !model) {
         throw new Error("Claude configuration is incomplete. Please provide an API key and model.");
