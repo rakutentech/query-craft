@@ -1,11 +1,16 @@
 // app/api/conversations/[id]/route.ts
 import { NextRequest, NextResponse } from 'next/server';
 import { getConversationByConnectionId, getConversationMessages } from '@/app/lib/db';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/lib/auth';
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  const conversationId = parseInt(params.id);
-
   try {
+    const session = await getServerSession(authOptions);
+    const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (session?.user?.id || 'anonymous') : 'anonymous';
+
+    const conversationId = parseInt(params.id);
+
     const messages = await getConversationMessages(conversationId);
     const processedMessages = messages.map(msg => {
       if (msg.sender === 'system' && msg.content.startsWith('```sql')) {

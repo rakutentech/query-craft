@@ -25,7 +25,7 @@ WORKDIR /app
 ENV NODE_ENV production
 
 # Copy necessary files
-COPY --from=builder /app/mydb.sqlite ./
+COPY --from=builder /app/query_craft.sqlite ./
 COPY --from=builder /app/next.config.mjs ./
 COPY --from=builder /app/public ./public
 COPY --from=builder /app/package.json ./package.json

@@ -37,18 +37,23 @@ import {
   RotateCcw,
   Check,
   Pencil,
-  Loader2
+  Loader2,
+  Share2
 } from "lucide-react";
 import { format, parseISO, addHours } from "date-fns";
 import ReactMarkdown from 'react-markdown';
 import { Textarea } from "@/components/ui/textarea";
+import { useSession, signIn, signOut } from 'next-auth/react';
+import { UnauthorizedAccess } from "@/components/UnauthorizedAccess";
 import {
   useChatProviderConfig
 } from "@/app/context/ChatProviderConfigContext";
+import { useToast } from "@/components/ui/use-toast";
 
 import Image from "next/image";
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
+const ENABLE_OAUTH = process.env.NEXT_PUBLIC_ENABLE_OAUTH;
 
 
 interface QueryResult {
@@ -75,6 +80,7 @@ interface DatabaseConnection {
   id: number;
   projectName: string;
   dbDriver: string;
+  tag?: string;
 }
 
 interface Conversation {
@@ -86,13 +92,12 @@ interface Conversation {
 
 
 export default function DatabaseQueryApp() {
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const { data: session, status } = useSession();
   const [currentConversation, setCurrentConversation] = useState<Conversation[]>([]); 
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<number | null>(null);
-  const [showAbout, setShowAbout] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingSql, setPendingSql] = useState<{
     sql: string;
@@ -104,6 +109,12 @@ export default function DatabaseQueryApp() {
   const [selectedConnectionId, setSelectedConnectionId] = useState<
     number | null
   >(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('selectedDatabaseTag') || null;
+    }
+    return null;
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const [editingSqlId, setEditingSqlId] = useState<number | null>(null);
@@ -111,13 +122,20 @@ export default function DatabaseQueryApp() {
   //  different state from send button loading operation, so that support multiple operations at the same time
   const [loadingOperation, setLoadingOperation] = useState<{ type: 'explain' | 'run' | null; messageId: number | null }>({ type: null, messageId: null });
   const conversationsCache = useRef<Map<number, Conversation[]>>(new Map());
+  const [showAuth, setShowAuth] = useState(false);
   const { providerConfig} = useChatProviderConfig();
+  const { toast } = useToast();
 
   useEffect(() => {
     checkSettings();
     fetchDatabaseConnections();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    setShowAuth(ENABLE_OAUTH === 'true');
+    if (typeof window !== 'undefined') {
+      window.showAbout = () => {
+        // This is now handled by the layout component
+      };
+    }
+  }, [ENABLE_OAUTH]);
 
   useEffect(() => {
     if (selectedConnectionId !== null) {
@@ -129,6 +147,14 @@ export default function DatabaseQueryApp() {
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  useEffect(() => {
+    if (selectedTag) {
+      localStorage.setItem('selectedDatabaseTag', selectedTag);
+    } else {
+      localStorage.removeItem('selectedDatabaseTag');
+    }
+  }, [selectedTag]);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -447,6 +473,46 @@ export default function DatabaseQueryApp() {
     setEditingSqlId(null);
   };
 
+  const handleShareMessage = async (messageId: number) => {
+    try {
+      const response = await fetch(`/api/messages/${messageId}/share`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to generate share link');
+      }
+
+      const data = await response.json();
+      const shareUrl = `${window.location.origin}/messages/shared/${data.token}`;
+      
+      await navigator.clipboard.writeText(shareUrl);
+      toast({
+        title: "Share link generated",
+        description: (
+          <div className="mt-2">
+            <p className="text-sm">Link copied to clipboard:</p>
+            <a 
+              href={shareUrl} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-sm text-blue-500 hover:underline break-all"
+            >
+              {shareUrl}
+            </a>
+          </div>
+        ),
+      });
+    } catch (error) {
+      console.error('Error sharing message:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate share link",
+        variant: "destructive",
+      });
+    }
+  };
+
   const renderMessage = (message: Message) => {
     const isError = message.error;
 
@@ -704,59 +770,141 @@ export default function DatabaseQueryApp() {
             <p className="text-xs mt-2 opacity-70">
               {formatJapanTime(message.timestamp)}
             </p>
+            <div className="mt-2 flex justify-end">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleShareMessage(message.id)}
+              >
+                <Share2 className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
     );
   };
 
+  const filteredConnections = selectedTag
+    ? databaseConnections.filter((conn: DatabaseConnection) => {
+        if (!conn.tag) return false;
+        const tags = conn.tag.split(',').map(t => t.trim());
+        return tags.includes(selectedTag);
+      })
+    : databaseConnections;
+
+  const uniqueTags = Array.from(
+    new Set(
+      databaseConnections
+        .map((conn: DatabaseConnection) => conn.tag?.split(',').map(t => t.trim()) || [])
+        .flat()
+        .filter(Boolean)
+    )
+  );
+
+  const handleTagSelect = (tag: string | null) => {
+    setSelectedTag(tag);
+  };
+
+  if (status === "loading") {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+      </div>
+    );
+  }
+
+  if (showAuth && !session) {
+    return <UnauthorizedAccess />;
+  }
+
   return (
     <div className="bg-gray-100 min-h-screen">
-      <div className="container mx-auto py-6 px-4">
-        <div className="flex justify-between items-center mb-6">
-          
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
+      <div className="container mx-auto py-2 px-2">
+        <div className="flex justify-between items-center border-b border-gray-200 pb-2">
+        <h1 className="text-2xl items-center font-bold p-2 text-gray-800">
+          Chat
+        </h1>
+          <div className="flex items-center space-x-4">
+            {showAuth && (
+              session ? (
+                <div className="flex items-center space-x-2">
+                  <Avatar className="w-8 h-8">
+                    {session.user?.image ? (
+                      <img
+                        src={session.user.image}
+                        alt={session.user?.name || 'User avatar'}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <AvatarFallback>
+                        {session.user?.name?.charAt(0) || 'U'}
+                      </AvatarFallback>
+                    )}
+                  </Avatar>
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium">{session.user?.name}</span>
+                    <span className="text-xs text-gray-500">{session.user?.email}</span>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => signOut()}
+                  >
+                    Sign Out
+                  </Button>
+                </div>
+              ) : (
                 <Button
                   variant="outline"
-                  size="icon"
-                  onClick={() => setShowAbout(!showAbout)}
+                  size="sm"
+                  onClick={() => signIn('github')}
                 >
-                  <Info className="h-4 w-4" />
+                  Sign In
                 </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>About QueryCraft</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+              )
+            )}
+          </div>
         </div>
-
-        {showAbout && (
-          <Card className="mb-6">
-            <CardHeader>About QueryCraft</CardHeader>
-            <CardContent>
-              <p>
-                QueryCraft is an AI-powered tool that helps you generate and
-                execute SQL queries using natural language. Simply type your
-                question, and QueryCraft will generate the appropriate SQL query
-                and run it against your database. It&apos;s designed to make database
-                querying more accessible and efficient for both beginners and
-                experienced users.
-              </p>
-            </CardContent>
-          </Card>
-        )}
 
         <div className="flex space-x-6">
           <div className="w-1/4 min-w-[250px]">
-            <Card className="mb-6">
-              <CardHeader>Database Connections</CardHeader>
+            <Card className="mb-4">
+            <CardHeader className="border-b border-gray-200">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-xl font-semibold text-gray-800">
+                    Databases
+                  </h2>
+                </div>
+              </CardHeader> 
               <CardContent>
-                <ScrollArea className="h-[200px]">
+                {uniqueTags.length > 0 && (
+                  <div className="mb-4 mt-2">
+                    <div className="text-sm font-medium mb-2">Filter by Tag</div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant={!selectedTag ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => handleTagSelect(null)}
+                      >
+                        All
+                      </Button>
+                      {uniqueTags.map(tag => (
+                        <Button
+                          key={tag}
+                          variant={selectedTag === tag ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => handleTagSelect(tag)}
+                        >
+                          {tag}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <ScrollArea className="h-[120px]">
                   <ul className="space-y-2">
-                    {databaseConnections.map((connection) => (
+                    {filteredConnections.map((connection) => (
                       <li key={connection.id}>
                         <Button
                           variant={
