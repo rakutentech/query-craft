@@ -1,30 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabaseConnections, executeQuery } from '@/app/lib/db';
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/app/lib/auth';
 
 export async function GET(request: NextRequest) {
   try {
+    const session = await getServerSession(authOptions);
+    const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (session?.user?.id || 'anonymous') : 'anonymous';
+    
     const { searchParams } = new URL(request.url);
-    const connectionId = searchParams.get('connectionId');
-
-    if (!connectionId) {
+    const connectionIdParam = searchParams.get('connectionId');
+    const connectionId = parseInt(connectionIdParam || '', 10);
+    
+    if (!connectionIdParam) {
       return NextResponse.json(
         { error: 'Missing required parameter: connectionId' },
         { status: 400 }
       );
     }
 
-    const connId = parseInt(connectionId, 10);
-
-    const connections = await getDatabaseConnections();
-    const currentConnection = connections.find(conn => conn.id === connId);
-
-    if (!currentConnection) {
-        return NextResponse.json(
-        { error: "Invalid connection ID" },
-        { status: 400 }
-        );
-    }
-    const result = await executeQuery("SHOW TABLES;", connId);
+    const result = await executeQuery("SHOW TABLES;",  connectionId, userId);
     const tables = result.map((row: any) => Object.values(row)[0]);
 
     return NextResponse.json(tables, { status: 200 });
