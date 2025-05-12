@@ -44,6 +44,7 @@ interface DatabaseConnection {
   dbPassword: string;
   dbName: string;
   schema: string;
+  tag?: string;
 }
 
 interface Settings {
@@ -376,8 +377,8 @@ export default function SettingsPage() {
 
   return (
     <div className="container mx-auto py-8 px-4">
-      <h1 className="text-3xl font-bold mb-6 text-gray-800">
-        QueryCraft Settings
+      <h1 className="text-2xl font-bold mb-6 text-gray-800">
+        Settings
       </h1>
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
@@ -571,13 +572,21 @@ export default function SettingsPage() {
                         handleDatabaseInputChange(index, "dbName", e.target.value.trim())
                       }
                       placeholder="Enter database name"
-                      required
                     />
-                    {formErrors[`dbName-${index}`] && (
-                      <p className="text-red-500 text-sm mt-1">
-                        {formErrors[`dbName-${index}`]}
-                      </p>
-                    )}
+                  </div>
+                  <div>
+                    <Label htmlFor={`tag-${index}`}>Tags</Label>
+                    <Input
+                      id={`tag-${index}`}
+                      value={connection.tag || ''}
+                      onChange={(e) =>
+                        handleDatabaseInputChange(index, "tag", e.target.value)
+                      }
+                      placeholder="Enter tags (comma-separated)"
+                    />
+                    <p className="text-sm text-gray-500 mt-1">
+                      Separate multiple tags with commas
+                    </p>
                   </div>
                   <div>
                     <Label htmlFor={`schema-${index}`} className="mb-2">Schema</Label>
