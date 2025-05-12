@@ -24,7 +24,6 @@ export async function GET(request: NextRequest) {
         { status: 400 }
         );
     }
-    // const tables = await getTablesList(currentConnection);
     const result = await executeQuery("SHOW TABLES;", connId);
     const tables = result.map((row: any) => Object.values(row)[0]);
 
