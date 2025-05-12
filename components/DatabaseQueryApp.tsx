@@ -337,6 +337,15 @@ export default function DatabaseQueryApp() {
     setLoadingOperation({ type: null, messageId: null });
   };
 
+  const filterHistory = (searchText: string) => {
+    if (!selectedConnectionId) return;
+    const searchTerm = searchText.toLowerCase();
+    const filteredConversations = conversationsCache.current.get(selectedConnectionId)?.filter((conversation) =>
+      conversation.title.toLowerCase().includes(searchTerm)
+    );
+    setCurrentConversation(filteredConversations || []);
+  }
+
   const executeSql = async (sql: string, messageId: number) => {
     if (!selectedConnectionId) {
       setMessages((prev) =>
@@ -945,7 +954,14 @@ export default function DatabaseQueryApp() {
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <ScrollArea className="h-[calc(99vh-500px)] overflow-y-auto">
+              <div className="flex items-center justify-between p-2 border-b border-gray-200">
+                <Input
+                    placeholder="Search..."
+                    className="border border-gray-300 rounded-md p-1 w-full"
+                    onChange={(e) => filterHistory(e.target.value)}
+                  />
+                </div>
+                <ScrollArea className="h-[calc(99vh-550px)] overflow-y-auto">
                   <ul className="divide-y divide-gray-200">
                     {selectedConnectionId &&
                       currentConversation?.map(
