@@ -29,10 +29,10 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(tables, { status: 200 });
   } catch (error) {
-    console.error('Error fetching history:', error);
+    console.error('Error fetching tables:', error);
     
     return NextResponse.json(
-      { error: 'Failed to fetch history', details: (error as Error).message },
+      { error: 'Failed to fetch tables', details: (error as Error).message },
       { status: 500 }
     );
   }
