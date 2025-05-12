@@ -207,7 +207,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: "Failed to process query", details: errorMessage },
+      { error: "Failed to process query", message: errorMessage },
       { status: statusCode }
     );
   }

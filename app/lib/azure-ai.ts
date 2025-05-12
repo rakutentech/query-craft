@@ -1,6 +1,7 @@
 // lib/azure-ai.ts
 import OpenAI, { ClientOptions } from 'openai';
 import { HttpsProxyAgent } from 'https-proxy-agent';
+import {AI_PROVIDER_ERROR} from "@/constants/error";
 
 const proxyURL = process.env.PROXY_URL!;
 
@@ -31,6 +32,5 @@ export async function generateAzureChatResponse(azureConfig: any, messages: Open
   } catch (error) {
     console.dir(error)
     console.error("Error calling Azure OpenAI:", error);
-    throw new Error("Failed to generate response from AI.");
-  }
+    throw new Error(`${AI_PROVIDER_ERROR}: ${error instanceof Error ? error.message : String(error)}`);  }
 }

@@ -1,5 +1,6 @@
 // File: `app/lib/lm-studio.ts`
 import {ChatInput, LMStudioClient} from "@lmstudio/sdk";
+import {AI_PROVIDER_ERROR} from "@/constants/error";
 
 
 export async function generateLMStudioChatResponse(lmStudioConfig: any, message: ChatInput): Promise<string> {
@@ -26,7 +27,7 @@ export async function generateLMStudioChatResponse(lmStudioConfig: any, message:
         return response.content;
     } catch (error) {
         console.error("Error calling LM Studio:", error);
-        throw new Error("Failed to generate response from LM Studio.");
+        throw new Error(`${AI_PROVIDER_ERROR}: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 

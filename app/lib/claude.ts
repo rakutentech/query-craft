@@ -1,5 +1,6 @@
 // lib/claude.ts
 import { Anthropic, ClientOptions } from '@anthropic-ai/sdk';
+import {AI_PROVIDER_ERROR} from "@/constants/error";
 
 class CustomAnthropic extends Anthropic {
     constructor(options: ClientOptions & { baseUrl?: string }) {
@@ -37,6 +38,6 @@ export async function generateClaudeChatResponse(claudeConfig: any, systemPrompt
             .join("");
     } catch (error) {
         console.error("Error calling Claude API:", error);
-        throw new Error("Failed to generate response from Claude.");
+        throw new Error(`${AI_PROVIDER_ERROR}: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
