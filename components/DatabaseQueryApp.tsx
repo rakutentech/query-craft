@@ -47,6 +47,7 @@ import {
 } from "@/app/context/ChatProviderConfigContext";
 
 import Image from "next/image";
+import { TagCloud } from "@/components/ui/tag-cloud";
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 
@@ -108,6 +109,7 @@ export default function DatabaseQueryApp() {
   const router = useRouter();
   const [editingSqlId, setEditingSqlId] = useState<number | null>(null);
   const [copySuccessId, setCopySuccessId] = useState<number | null>(null);
+  const [listOfDBTables, setListOfDBTables] = useState<string[]>([]);
   //  different state from send button loading operation, so that support multiple operations at the same time
   const [loadingOperation, setLoadingOperation] = useState<{ type: 'explain' | 'run' | null; messageId: number | null }>({ type: null, messageId: null });
   const conversationsCache = useRef<Map<number, Conversation[]>>(new Map());
@@ -122,6 +124,7 @@ export default function DatabaseQueryApp() {
   useEffect(() => {
     if (selectedConnectionId !== null) {
       fetchConversationsByConnection(selectedConnectionId);
+      fetchListOfDBTables();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConnectionId]);
@@ -163,6 +166,19 @@ export default function DatabaseQueryApp() {
       }
     } catch (error) {
       console.error("Error fetching database connections:", error);
+    }
+  };
+
+  const fetchListOfDBTables = async () => {
+    try {
+      const response = await fetch(`${BASE_PATH}/api/db-tables?connectionId=${selectedConnectionId}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch database tables");
+      }
+      const data = await response.json();
+      setListOfDBTables(data);
+    } catch (error) {
+      console.error("Error fetching database tables:", error);
     }
   };
 
@@ -830,6 +846,18 @@ export default function DatabaseQueryApp() {
               <CardContent className="flex-1 overflow-hidden p-4">
                 <ScrollArea className="h-full pr-4">
                   <div className="space-y-4 h-[calc(80vh-65px)]">
+                    {messages.length === 0 && (
+                      <div>
+                        <p className="text-center text-gray-500">
+                          Start a conversation by typing your query.
+                          <br />
+                          Here are the available tables in your database:
+                        </p>
+                        <div className="">
+                          <TagCloud className="mt-4" tags={listOfDBTables} />
+                        </div>
+                      </div>
+                    )}
                     {messages.map(renderMessage)}
                     <div ref={messagesEndRef} />
                   </div>

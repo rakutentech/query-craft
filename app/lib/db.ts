@@ -347,6 +347,66 @@ export async function executeQuery(sql: string, connectionId: number): Promise<a
   return result;
 }
 
+// export async function getTablesList(connection: DatabaseConnection): Promise<string[]> {
+//   let tables = [];
+
+//   try {
+//     switch (connection.dbDriver) {
+//       case "mysql":
+//         const mysqlPool = mysql.createPool({
+//           host: connection.dbHost,
+//           port: parseInt(connection.dbPort),
+//           user: connection.dbUsername,
+//           password: connection.dbPassword,
+//           database: connection.dbName,
+//           connectionLimit: 1
+//         });
+//         const mysqlConnection = await mysqlPool.getConnection();
+//         const [rows] = await mysqlConnection.query("SHOW TABLES");
+//         const tableResult = rows as any[];
+//         tables = tableResult.map((row: any) => Object.values(row)[0]);
+//         await mysqlConnection.release();
+//         await mysqlPool.end();
+//         break;
+//       case "mariadb":
+//         const mariadbPool = mariadb.createPool({
+//           host: connection.dbHost,
+//           port: parseInt(connection.dbPort),
+//           user: connection.dbUsername,
+//           password: connection.dbPassword,
+//           database: connection.dbName,
+//           connectionLimit: 1
+//         });
+//         const mariadbConnection = await mariadbPool.getConnection();
+//         const mariadbRows = await mariadbConnection.query("SHOW TABLES");
+//         tables = mariadbRows.map((row: any) => Object.values(row)[0]);
+//         await mariadbConnection.release();
+//         await mariadbPool.end();
+//         break;
+//       case "postgresql":
+//         const pgClient = new pg.Client({
+//           host: connection.dbHost,
+//           port: parseInt(connection.dbPort),
+//           user: connection.dbUsername,
+//           password: connection.dbPassword,
+//           database: connection.dbName
+//         });
+//         await pgClient.connect();
+//         const pgResult = await pgClient.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public'");
+//         tables = pgResult.rows.map((row) => row.table_name);
+//         await pgClient.end();
+//         break;
+//       default:
+//         throw new Error(`Unsupported database driver: ${connection.dbDriver}`);
+//     }
+//   } catch (error) {
+//     console.error("Error getting tables list:", error);
+//     throw new Error(`Failed to get tables list: ${(error as Error).message}`);
+//   }
+
+//   return tables;
+// }
+
 // Add this new function to retrieve the database schema
 export async function getDatabaseSchema(connection: DatabaseConnection): Promise<string> {
   let schema = '';
