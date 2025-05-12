@@ -1,0 +1,1 @@
+export const AI_PROVIDER_ERROR = "AI Provider Error"

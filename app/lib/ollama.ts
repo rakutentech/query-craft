@@ -1,5 +1,6 @@
 // lib/ollama.ts
 import {Message, Ollama} from "ollama";
+import {AI_PROVIDER_ERROR} from "@/constants/error";
 
 export async function generateOllamaChatResponse(ollamaConfig: any, messages: Message[]): Promise<string> {
     const { type, endpoint, model, apiKey } = ollamaConfig;
@@ -26,7 +27,7 @@ export async function generateOllamaChatResponse(ollamaConfig: any, messages: Me
         return response.message.content;
     } catch (error) {
         console.error("Error calling Ollama:", error);
-        throw new Error("Failed to generate response from AI.");
+        throw new Error(`${AI_PROVIDER_ERROR}: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
 

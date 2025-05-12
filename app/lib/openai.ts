@@ -1,5 +1,6 @@
 // lib/openai.ts
 import { OpenAI } from "openai";
+import {AI_PROVIDER_ERROR} from "@/constants/error";
 
 export async function generateOpenAIChatResponse(openaiConfig: any, messages:  OpenAI.Chat.Completions.ChatCompletionMessageParam[]): Promise<string> {
     try {
@@ -23,6 +24,6 @@ export async function generateOpenAIChatResponse(openaiConfig: any, messages:  O
         return response.choices[0]?.message?.content || 'No response generated.';
     } catch (error) {
         console.error('Error generating chat response:', error);
-        throw new Error('Failed to generate response from OpenAI.');
+        throw new Error(`${AI_PROVIDER_ERROR}: ${error instanceof Error ? error.message : String(error)}`);
     }
 }
