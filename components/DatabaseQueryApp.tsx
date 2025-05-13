@@ -52,6 +52,7 @@ import { useToast } from "@/components/ui/use-toast";
 
 import Image from "next/image";
 import { TagCloud } from "@/components/ui/tag-cloud";
+import {AI_PROVIDER_ERROR} from "@/constants/error";
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 const ENABLE_OAUTH = process.env.NEXT_PUBLIC_ENABLE_OAUTH;
@@ -262,11 +263,11 @@ export default function DatabaseQueryApp() {
         })
       });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
       const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.message || `HTTP error! status: ${response.status}`);
+      }
 
       if (data.error) {
         throw new Error(data.error);
@@ -383,6 +384,7 @@ export default function DatabaseQueryApp() {
         throw new Error(
           data.details?.sqlMessage ||
             data.message ||
+            data.error ||
             "An error occurred while executing the SQL query."
         );
       }
@@ -530,11 +532,11 @@ export default function DatabaseQueryApp() {
   };
 
   const renderMessage = (message: Message) => {
-    const isError = message.error;
+    const isAIProviderError = message.content.startsWith(AI_PROVIDER_ERROR);
 
     const renderContent = (content: string) => {
       const parts = content.split(/(```sql[\s\S]*?```)/);
-      
+
       return parts.map((part, index) => {
         if (part.startsWith('```sql')) {
           const sql = part.replace('```sql', '').replace('```', '').trim();
@@ -653,11 +655,10 @@ export default function DatabaseQueryApp() {
       });
     };
 
-    const messageClass = isError
-      ? "bg-red-100 text-red-900"
-      : message.sender === "user"
-      ? "bg-blue-50 text-gray-800"
-      : "bg-gray-100 text-gray-800";
+    const messageClass = message.sender === "user"
+            ? "bg-blue-50 text-gray-800"
+            : "bg-gray-100 text-gray-800";
+    const errorClass = "bg-red-100 text-red-900"
 
     const renderResult = () => {
       if (!message.result) return null;
@@ -680,7 +681,7 @@ export default function DatabaseQueryApp() {
                 {Object.keys(message.result[0]).map((key) => (
                   <th
                     key={key}
-                    className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"
+                    className={`px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap ${key === 'error' ? errorClass : ""}`}
                   >
                     {key}
                   </th>
@@ -691,7 +692,9 @@ export default function DatabaseQueryApp() {
               {message.result.map((row, index) => (
                 <tr
                   key={index}
-                  className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                  className={`${
+                      row.error ? errorClass : index % 2 === 0 ? "bg-white" : "bg-gray-50"}
+                      `}
                 >
                   {Object.values(row).map((value, idx) => (
                     <td
@@ -769,8 +772,8 @@ export default function DatabaseQueryApp() {
               )}
             </AvatarFallback>
           </Avatar>
-          <div className={`rounded-lg p-3 ${messageClass} max-w-[600px] shadow-md`}>
-            {isError ? (
+          <div className={`rounded-lg p-3 ${isAIProviderError? errorClass : messageClass} max-w-[600px] shadow-md`}>
+            {isAIProviderError ? (
               <Alert variant="destructive">
                 <AlertTitle>Error</AlertTitle>
                 <AlertDescription>{message.content}</AlertDescription>
