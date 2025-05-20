@@ -8,6 +8,7 @@
       "dbUsername": "username",
       "dbPassword": "password",
       "dbName": "database_name",
+      "tag": "Tag",
       "schema": ""
     }
   ]

@@ -6,8 +6,8 @@ import { getServerSession } from "next-auth/next";
 export const authOptions: NextAuthOptions = {
   providers: process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? [
     GithubProvider({
-      clientId: process.env.GITHUB_ID as string,
-      clientSecret: process.env.GITHUB_SECRET as string,
+      clientId: process.env.OAUTH_GITHUB_ID as string,
+      clientSecret: process.env.OAUTH_GITHUB_SECRET as string,
       authorization: {
         url: `${process.env.OAUTH_GITHUB_ENTERPRISE_URL}/login/oauth/authorize`,
         params: { scope: "read:user user:email" }

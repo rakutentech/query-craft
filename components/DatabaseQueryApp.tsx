@@ -78,12 +78,17 @@ interface Message {
 }
 
 interface DatabaseConnection {
-  id: number;
+  id?: number;
   projectName: string;
   dbDriver: string;
+  dbHost: string;
+  dbPort: string;
+  dbUsername: string;
+  dbPassword: string;
+  dbName: string;
+  schema: string;
   tag?: string;
 }
-
 interface Conversation {
   id: number;
   title: string;
@@ -131,11 +136,6 @@ export default function DatabaseQueryApp() {
     checkSettings();
     fetchDatabaseConnections();
     setShowAuth(ENABLE_OAUTH === 'true');
-    if (typeof window !== 'undefined') {
-      window.showAbout = () => {
-        // This is now handled by the layout component
-      };
-    }
   }, [ENABLE_OAUTH]);
 
   useEffect(() => {
@@ -222,7 +222,10 @@ export default function DatabaseQueryApp() {
     }
   };
 
-  const handleConnectionSelect = (connectionId: number) => {
+  const handleConnectionSelect = (connectionId: number | undefined) => {
+    if (!connectionId) {
+      return;
+    }
     setSelectedConnectionId(connectionId);
     setConversationId(null);
     setMessages([]);
@@ -230,6 +233,17 @@ export default function DatabaseQueryApp() {
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || !selectedConnectionId) return;
+
+    setInputMessage(""); // Clear input immediately
+
+    // Optimistically add user's message to chat area
+    const tempMessage: Message = {
+      id: Date.now(),
+      content: inputMessage,
+      sender: "user",
+      timestamp: formatJapanTime(new Date().toISOString()),
+    };
+    setMessages((prev) => [...prev, tempMessage]);
 
     setIsLoading(true);
 
@@ -300,7 +314,6 @@ export default function DatabaseQueryApp() {
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
-      setInputMessage("");
       setIsLoading(false);
     }
   };
@@ -883,8 +896,7 @@ export default function DatabaseQueryApp() {
               <CardContent>
                 {uniqueTags.length > 0 && (
                   <div className="mb-4 mt-2">
-                    <div className="text-sm font-medium mb-2">Filter by Tag</div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 h-20 overflow-y-auto">
                       <Button
                         variant={!selectedTag ? "default" : "outline"}
                         size="sm"
@@ -928,7 +940,7 @@ export default function DatabaseQueryApp() {
               </CardContent>
             </Card>
 
-            <Card className="h-[calc(100vh-420px)] bg-white shadow-lg">
+            <Card className="h-[calc(100vh-440px)] bg-white shadow-lg">
               <CardHeader className="border-b border-gray-200">
                 <div className="flex justify-between items-center">
                   <h2 className="text-xl font-semibold text-gray-800">
