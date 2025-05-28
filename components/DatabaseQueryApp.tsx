@@ -138,7 +138,8 @@ export default function DatabaseQueryApp() {
     checkSettings();
     fetchDatabaseConnections();
     setShowAuth(ENABLE_OAUTH === 'true');
-  }, [ENABLE_OAUTH]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (selectedConnectionId !== null) {

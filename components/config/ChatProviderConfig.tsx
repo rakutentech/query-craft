@@ -91,11 +91,13 @@ function ChatProviderConfig() {
         };
 
         loadFromCookies();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [setProviderConfig, setOllamaModels, setLMStudioModels]);
 
     useEffect(() => {
-        fetchOllamaModels()
-        fetchLMStudioModels
+        fetchOllamaModels();
+        fetchLMStudioModels();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     const fetchOllamaModels = async () => {
