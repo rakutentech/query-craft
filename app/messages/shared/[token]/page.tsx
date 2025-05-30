@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useToast } from '@/components/ui/use-toast';
+import ReactMarkdown from 'react-markdown';
 
 interface SharedMessage {
   id: number;
@@ -219,9 +220,9 @@ export default function SharedMessagePage({ params }: { params: { token: string 
         const isEditing = editingSqlId === message?.id;
 
         return (
-          <div key={index} className="my-4 bg-blue-50 border border-blue-100 rounded-lg p-4">
-            <div className="flex justify-between items-center mb-3">
-              <p className="font-semibold text-blue-800">Generated SQL:</p>
+          <div key={index} className="my-3 bg-blue-100 text-blue-900 p-3 rounded-lg">
+            <div className="flex justify-between items-center mb-2">
+              <p className="font-semibold">Generated SQL:</p>
               <div className="flex gap-2">
                 {!isEditing && (
                   <>
@@ -346,12 +347,17 @@ export default function SharedMessagePage({ params }: { params: { token: string 
                 </div>
               </div>
             ) : (
-              <pre className="bg-white p-4 rounded-md overflow-x-auto font-mono text-sm text-blue-900 border border-blue-200">{sql}</pre>
+              <pre className="bg-gray-800 text-gray-100 p-2 rounded-md overflow-x-auto font-mono text-sm whitespace-pre-wrap">{sql}</pre>
             )}
           </div>
         );
       }
-      return <p key={index} className="text-gray-700">{part}</p>;
+      // Handle regular text with markdown support
+      return part.trim() ? (
+        <div key={index} className="prose dark:prose-invert max-w-none">
+          <ReactMarkdown>{part}</ReactMarkdown>
+        </div>
+      ) : null;
     });
   };
 
@@ -368,34 +374,48 @@ export default function SharedMessagePage({ params }: { params: { token: string 
     }
 
     if (Array.isArray(message.result)) {
+      if (message.result.length === 0) {
+        return (
+          <Alert>
+            <AlertTitle>No Results</AlertTitle>
+            <AlertDescription>
+              The query returned no results.
+            </AlertDescription>
+          </Alert>
+        );
+      }
       return (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-gray-200">
-            <thead className="bg-gray-50">
-              <tr>
-                {Object.keys(message.result[0] || {}).map((key) => (
-                  <th
-                    key={key}
-                    className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"
+        <table className="w-full table-auto">
+          <thead>
+            <tr className="bg-gray-50">
+              {Object.keys(message.result[0]).map((key) => (
+                <th
+                  key={key}
+                  className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"
+                >
+                  {key}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {message.result.map((row, index) => (
+              <tr
+                key={index}
+                className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
+              >
+                {Object.values(row).map((value, idx) => (
+                  <td
+                    key={idx}
+                    className="px-4 py-2 whitespace-nowrap text-sm text-gray-900"
                   >
-                    {key}
-                  </th>
+                    {String(value)}
+                  </td>
                 ))}
               </tr>
-            </thead>
-            <tbody className="bg-white divide-y divide-gray-200">
-              {message.result.map((row, index) => (
-                <tr key={index}>
-                  {Object.values(row).map((value, i) => (
-                    <td key={i} className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {String(value)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
       );
     }
 
@@ -467,16 +487,16 @@ export default function SharedMessagePage({ params }: { params: { token: string 
 
           <div className="bg-white rounded-lg shadow-lg p-6">
             <div className="flex items-start space-x-4">
-              <Avatar className="w-10 h-10">
+              <Avatar className="w-8 h-8">
                 <AvatarFallback
                   className={
                     message.sender === "user" ? "bg-blue-100" : "bg-gray-300"
                   }
                 >
                   {message.sender === "user" ? (
-                    <User className="w-6 h-6 text-blue-600" />
+                    <User className="w-5 h-5 text-blue-600" />
                   ) : (
-                    <Bot className="w-6 h-6 text-gray-600" />
+                    <Bot className="w-5 h-5 text-gray-600" />
                   )}
                 </AvatarFallback>
               </Avatar>
@@ -492,7 +512,7 @@ export default function SharedMessagePage({ params }: { params: { token: string 
                   </div>
                 )}
                 {message.result && (
-                  <div className="mt-4 bg-gray-50 rounded-lg p-4">
+                  <div className="mt-4 bg-white rounded-md shadow-inner overflow-x-auto">
                     {renderResult()}
                   </div>
                 )}

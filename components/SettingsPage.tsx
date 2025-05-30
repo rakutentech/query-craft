@@ -104,7 +104,8 @@ export default function SettingsPage() {
         dbUsername: "",
         dbPassword: "",
         dbName: "",
-        schema: ""
+        schema: "",
+        tag: ""
       }
     ]
   });
@@ -120,7 +121,8 @@ export default function SettingsPage() {
   );
   const router = useRouter();
   const { providerConfig } = useChatProviderConfig(); // Access providerConfig
-
+  const [showSchemaConfirmDialog, setShowSchemaConfirmDialog] = useState(false);
+  const [connectionsWithoutSchema, setConnectionsWithoutSchema] = useState<number[]>([]);
 
   useEffect(() => {
     fetchSettings();
@@ -291,13 +293,16 @@ export default function SettingsPage() {
           ...prev,
           [index]: "Connection successful and schema saved"
         }));
-        setSettings((prev) => {
-          const newConnections = [...prev.databaseConnections];
-          newConnections[index] = {
-            ...newConnections[index],
-            schema: result.schema
-          };
-          return { ...prev, databaseConnections: newConnections };
+        await new Promise(resolve => {
+          setSettings((prev) => {
+            const newConnections = [...prev.databaseConnections];
+            newConnections[index] = {
+              ...newConnections[index],
+              schema: result.schema
+            };
+            resolve(undefined);
+            return { ...prev, databaseConnections: newConnections };
+          });
         });
         return true;
       } else {
@@ -322,19 +327,26 @@ export default function SettingsPage() {
       setError("Please fill in all required fields");
       return;
     }
+
+    // Check for connections without schema
+    const emptySchemaConnections = settings.databaseConnections
+      .map((conn, index) => ({ index, hasSchema: conn.schema.trim() !== '' }))
+      .filter(conn => !conn.hasSchema)
+      .map(conn => conn.index);
+
+    if (emptySchemaConnections.length > 0) {
+      setConnectionsWithoutSchema(emptySchemaConnections);
+      setShowSchemaConfirmDialog(true);
+      return;
+    }
+
+    await saveSettings();
+  };
+
+  const saveSettings = async () => {
     setIsSaving(true);
     setError(null);
     try {
-      // Iterate over connections and test them before saving
-      for (let index = 0; index < settings.databaseConnections.length; index++) {
-        const success = await testAndSaveConnection(index);
-        if (!success) {
-          setError(`Connection test failed for Database Connection ${index + 1}. Please fix the connection and try again.`);
-          setIsSaving(false);
-          return;
-        }
-      }
-
       // Save configuration to cookies
       const encodedConfig = encodeURIComponent(JSON.stringify(providerConfig));
       Cookies.set("chatProviderConfig", encodedConfig, {
@@ -344,7 +356,7 @@ export default function SettingsPage() {
         sameSite: "strict",
       });
 
-      // Save all settings if all tests pass
+      // Save all settings
       const response = await fetch(`${BASE_PATH}/api/settings`, {
         method: "POST",
         headers: {
@@ -418,6 +430,30 @@ export default function SettingsPage() {
               className="bg-red-600 hover:bg-red-700"
             >
               Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={showSchemaConfirmDialog} onOpenChange={setShowSchemaConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Warning: Empty Schemas</AlertDialogTitle>
+            <AlertDialogDescription>
+              The following database connections have empty schemas:
+              <ul className="list-disc pl-5 mt-2">
+                {connectionsWithoutSchema.map(index => (
+                  <li key={index}>Database Connection {index + 1}</li>
+                ))}
+              </ul>
+              Do you want to proceed with saving the settings without testing the connections?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowSchemaConfirmDialog(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={saveSettings}>
+              Save Anyway
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

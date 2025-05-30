@@ -4,6 +4,7 @@ import React, {useState, useEffect, useRef, useContext} from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
@@ -78,12 +79,17 @@ interface Message {
 }
 
 interface DatabaseConnection {
-  id: number;
+  id?: number;
   projectName: string;
   dbDriver: string;
+  dbHost: string;
+  dbPort: string;
+  dbUsername: string;
+  dbPassword: string;
+  dbName: string;
+  schema: string;
   tag?: string;
 }
-
 interface Conversation {
   id: number;
   title: string;
@@ -130,17 +136,15 @@ export default function DatabaseQueryApp() {
   const [stopStreaming, setStopStreaming] = useState(false);
   const stopStreamingRef = useRef(false);
   const prevMessagesRef = useRef<Message[]>([]);
+  const [editingTitleId, setEditingTitleId] = useState<number | null>(null);
+  const [editingTitle, setEditingTitle] = useState("");
 
   useEffect(() => {
     checkSettings();
     fetchDatabaseConnections();
     setShowAuth(ENABLE_OAUTH === 'true');
-    if (typeof window !== 'undefined') {
-      window.showAbout = () => {
-        // This is now handled by the layout component
-      };
-    }
-  }, [ENABLE_OAUTH]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (selectedConnectionId !== null) {
@@ -237,7 +241,10 @@ export default function DatabaseQueryApp() {
     }
   };
 
-  const handleConnectionSelect = (connectionId: number) => {
+  const handleConnectionSelect = (connectionId: number | undefined) => {
+    if (!connectionId) {
+      return;
+    }
     setSelectedConnectionId(connectionId);
     setConversationId(null);
     setMessages([]);
@@ -245,6 +252,17 @@ export default function DatabaseQueryApp() {
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim() || !selectedConnectionId) return;
+
+    setInputMessage(""); // Clear input immediately
+
+    // Optimistically add user's message to chat area
+    const tempMessage: Message = {
+      id: Date.now(),
+      content: inputMessage,
+      sender: "user",
+      timestamp: formatJapanTime(new Date().toISOString()),
+    };
+    setMessages((prev) => [...prev, tempMessage]);
 
     setIsLoading(true);
     let metaReceived = false;
@@ -363,7 +381,6 @@ export default function DatabaseQueryApp() {
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
-      setInputMessage("");
       setIsLoading(false);
       setIsStreaming(false);
       setStopStreaming(false);
@@ -931,6 +948,59 @@ export default function DatabaseQueryApp() {
     setSelectedTag(tag);
   };
 
+  const handleTitleEdit = (conversation: Conversation) => {
+    setEditingTitleId(conversation.id);
+    setEditingTitle(conversation.title);
+  };
+
+  const handleTitleSave = async (conversationId: number) => {
+    try {
+      const response = await fetch(`${BASE_PATH}/api/conversations/${conversationId}/title`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ title: editingTitle }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to update title');
+      }
+
+      // Update local state
+      setCurrentConversation(prev =>
+        prev.map(conv =>
+          conv.id === conversationId
+            ? { ...conv, title: editingTitle }
+            : conv
+        )
+      );
+
+      // Update cache
+      if (selectedConnectionId) {
+        const cachedConversations = conversationsCache.current.get(selectedConnectionId) || [];
+        conversationsCache.current.set(
+          selectedConnectionId,
+          cachedConversations.map(conv =>
+            conv.id === conversationId
+              ? { ...conv, title: editingTitle }
+              : conv
+          )
+        );
+      }
+
+      setEditingTitleId(null);
+      setEditingTitle("");
+    } catch (error) {
+      console.error('Error updating title:', error);
+      toast({
+        title: "Error",
+        description: "Failed to update conversation title",
+        variant: "destructive",
+      });
+    }
+  };
+
   if (status === "loading") {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -1005,8 +1075,7 @@ export default function DatabaseQueryApp() {
               <CardContent>
                 {uniqueTags.length > 0 && (
                   <div className="mb-4 mt-2">
-                    <div className="text-sm font-medium mb-2">Filter by Tag</div>
-                    <div className="flex flex-wrap gap-2">
+                    <div className="flex flex-wrap gap-2 h-20 overflow-y-auto">
                       <Button
                         variant={!selectedTag ? "default" : "outline"}
                         size="sm"
@@ -1050,7 +1119,7 @@ export default function DatabaseQueryApp() {
               </CardContent>
             </Card>
 
-            <Card className="h-[calc(100vh-420px)] bg-white shadow-lg">
+            <Card className="h-[calc(100vh-440px)] bg-white shadow-lg">
               <CardHeader className="border-b border-gray-200">
                 <div className="flex justify-between items-center">
                   <h2 className="text-xl font-semibold text-gray-800">
@@ -1079,13 +1148,73 @@ export default function DatabaseQueryApp() {
                                 ? "bg-blue-100"
                                 : ""
                             }`}
-                            onClick={() =>
-                              handleConversationClick(conversation)
-                            }
                           >
-                            <p className="font-medium text-gray-800 truncate">
-                              {conversation.title}
-                            </p>
+                            <div className="flex items-center justify-between">
+                              {editingTitleId === conversation.id ? (
+                                <div className="flex-1 mr-2">
+                                  <Input
+                                    value={editingTitle}
+                                    onChange={(e) => setEditingTitle(e.target.value)}
+                                    onKeyDown={(e) => {
+                                      if (e.key === 'Enter') {
+                                        handleTitleSave(conversation.id);
+                                      } else if (e.key === 'Escape') {
+                                        setEditingTitleId(null);
+                                        setEditingTitle("");
+                                      }
+                                    }}
+                                    className="h-8"
+                                    autoFocus
+                                  />
+                                </div>
+                              ) : (
+                                <div
+                                  className="flex-1"
+                                  onClick={() => handleConversationClick(conversation)}
+                                >
+                                  <p className="font-medium text-gray-800 truncate">
+                                    {conversation.title}
+                                  </p>
+                                </div>
+                              )}
+                              <div className="flex items-center space-x-2">
+                                {editingTitleId === conversation.id ? (
+                                  <>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => handleTitleSave(conversation.id)}
+                                      className="h-8 w-8"
+                                    >
+                                      <Check className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={() => {
+                                        setEditingTitleId(null);
+                                        setEditingTitle("");
+                                      }}
+                                      className="h-8 w-8"
+                                    >
+                                      <RotateCcw className="h-4 w-4" />
+                                    </Button>
+                                  </>
+                                ) : (
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleTitleEdit(conversation);
+                                    }}
+                                    className="h-8 w-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
                             <p className="text-xs text-gray-500 mt-1">
                               {formatJapanTime(conversation.timestamp)}
                             </p>

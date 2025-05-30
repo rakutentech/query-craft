@@ -93,6 +93,7 @@ function ChatProviderConfig() {
         };
 
         loadFromCookies();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [setProviderConfig, setOllamaModels, setLMStudioModels]);
 
     const fetchOllamaModels = async () => {
