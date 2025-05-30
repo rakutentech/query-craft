@@ -149,6 +149,28 @@ export default function SettingsPage() {
       if (!conn.dbName) errors[`dbName-${index}`] = "Database name is required";
     });
 
+    const { selectedProvider, config } = providerConfig;
+    if (selectedProvider === "Azure OpenAI" && config.azure.mode === "Custom") {
+      if (!config.azure?.endpoint) errors["azure-endpoint"] = "Endpoint is required.";
+      if (!config.azure?.apiKey) errors["azure-api-key"] = "API Key is required.";
+      if (!config.azure?.model) errors["azure-deployment-id"] = "Deployment ID is required.";
+      if (!config.azure?.apiVersion) errors["azure-api-version"] = "API Version is required.";
+    } else if (selectedProvider === "Ollama") {
+      if (!config.ollama?.endpoint) errors["ollama-endpoint"] = "Endpoint is required.";
+      if (!config.ollama?.model) errors["ollama-model"] = "Model is required.";
+    } else if (selectedProvider === "LM Studio") {
+      if (!config.lmStudio?.endpoint) errors["lmstudio-endpoint"] = "Endpoint is required.";
+      if (!config.lmStudio?.model) errors["lmstudio-model"] = "Model is required.";
+    } else if (selectedProvider === "Claude" && config.claude.mode === "Custom") {
+      if (!config.claude?.endpoint) errors["claude-endpoint"] = "Endpoint is required.";
+      if (!config.claude?.apiKey) errors["claude-api-key"] = "API Key is required.";
+      if (!config.claude?.model) errors["claude-model"] = "Model is required.";
+    } else if (selectedProvider === "OpenAI" && config.openai.mode === "Custom") {
+      if (!config.openai?.endpoint) errors["openai-endpoint"] = "Endpoint is required.";
+      if (!config.openai?.apiKey) errors["openai-api-key"] = "API Key is required.";
+      if (!config.openai?.model) errors["openai-model"] = "Model is required.";
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };

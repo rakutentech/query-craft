@@ -4,8 +4,14 @@ import {generateLMStudioChatResponse, getLMStudioModelList} from "@/app/lib/lm-s
 export async function POST(req: Request) {
     try {
         const { lmStudioConfig, messages } = await req.json();
-        const response = await generateLMStudioChatResponse(lmStudioConfig, messages);
-        return NextResponse.json({ response });
+        const readableStream = await generateLMStudioChatResponse(lmStudioConfig, messages);
+        return new Response(readableStream, {
+            headers: {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                Connection: 'keep-alive',
+            },
+        });
     } catch (error) {
         console.error('Error in LM Studio API route:', error);
         return NextResponse.json({ error: 'Failed to generate response from LM Studio' }, { status: 500 });

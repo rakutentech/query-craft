@@ -2,7 +2,9 @@
 import sqlite3 from "sqlite3";
 import { open, Database as SQLiteDatabase } from "sqlite";
 import pg from "pg";
-import mysql, { QueryResult } from "mysql2/promise";
+import QueryStream from 'pg-query-stream';
+import mysqlStreaming from "mysql2";
+import mysql from "mysql2/promise";
 import mariadb from "mariadb";
 import util from 'util';
 import { exec } from 'child_process';
@@ -186,7 +188,7 @@ export async function getConversationMessages(
       [conversationId]
     );
   }
-}
+}getConversationMessages
 
 export async function getConversationByConnectionId(
   connectionId: number
@@ -512,6 +514,261 @@ export async function executeQuery(sql: string, connectionId: number, userId: st
   return result;
 }
 
+// Function to execute a query and return the streaming reslut
+export async function executeQueryStream(sql: string, connectionId: number, userId: string): Promise<Response> {
+  const connection = await getUserConnectionById(connectionId, userId);
+
+  if (!connection) {
+    throw new Error(`Database connection not found for id: ${connectionId}`);
+  }
+
+  const encoder = new TextEncoder();
+  const RATE_LIMIT = 100; // Rows per second
+  const interval = 1000; // Milliseconds
+  const tokensPerInterval = RATE_LIMIT;
+  let tokens = tokensPerInterval;
+  let lastFill = Date.now();
+
+  const pendingRows: any[] = [];
+  let closed = false;
+  let pool: any;
+
+  switch (connection.dbDriver) {
+    case "mysql":
+      pool = mysqlStreaming.createPool({
+        host: connection.dbHost,
+        port: parseInt(connection.dbPort),
+        user: connection.dbUsername,
+        password: connection.dbPassword,
+        database: connection.dbName,
+        connectionLimit: 10
+      });
+
+      const mysqlStream = new ReadableStream({
+        async start(controller) {
+          pool.getConnection((err: any, connection: any) => {
+            if (err) {
+              controller.error(err);
+              return;
+            }
+
+            // Stream the results of the query
+            const queryStream = connection.query(sql).stream({objectMode: true});
+
+            queryStream.on('data', (row: any) => {
+              if (closed) return; // If the stream is closed, do not process further
+              const now = Date.now();
+              const elapsed = now - lastFill;
+
+              if (tokens > 0) {
+                tokens--;
+                controller.enqueue(encoder.encode(JSON.stringify(row, jsonBigIntReplacer) + "\n"));
+              } else {
+                // Pause stream and schedule resume
+                queryStream.pause();
+                pendingRows.push(row);
+                const delay = interval - elapsed > 0 ? interval - elapsed : 0;
+                setTimeout(() => {
+                  tokens = tokensPerInterval;
+                  lastFill = Date.now();
+                  while (tokens > 0 && pendingRows.length > 0) {
+                    tokens--;
+                    const nextRow = pendingRows.shift();
+                    controller.enqueue(encoder.encode(JSON.stringify(nextRow, jsonBigIntReplacer) + "\n"));
+                  }
+                  queryStream.resume();
+                }, delay);
+              }
+            });
+
+            // Handle end event
+            queryStream.on('end', () => {
+              closed = true;
+              // Flush any remaining pending rows
+              while (pendingRows.length > 0) {
+                controller.enqueue(encoder.encode(JSON.stringify(pendingRows.shift(), jsonBigIntReplacer) + "\n"));
+              }
+              controller.close();
+              connection.release();
+              pool.end();
+            });
+
+            // Handle error events
+            queryStream.on('error', (err: any) => {
+              console.error("Error executing query:", err.message);
+              controller.enqueue(encoder.encode(JSON.stringify({error: err.message}) + "\n"));
+              controller.close();
+              connection.release();
+              pool.end();
+            });
+          });
+        }
+      });
+
+      return new Response(mysqlStream, {
+        headers: {
+          'Content-Type': 'application/x-ndjson',
+          'Transfer-Encoding': 'chunked',
+        }
+      });
+    case "postgresql":
+      pool = new pg.Pool({
+                host: connection.dbHost,
+                port: parseInt(connection.dbPort),
+                user: connection.dbUsername,
+                password: connection.dbPassword,
+                database: connection.dbName,
+                max: 10
+              });
+
+      const postgresqlStream = new ReadableStream({
+        async start(controller) {
+          const conn = await pool.connect();
+          try {
+            const query = new QueryStream(sql);
+            const queryStream = conn.query(query);
+
+            queryStream.on('data', (row: any) => {
+              if (closed) return; // If the stream is closed, do not process further
+              const now = Date.now();
+              const elapsed = now - lastFill;
+
+              if (tokens > 0) {
+                tokens--;
+                controller.enqueue(encoder.encode(JSON.stringify(row, jsonBigIntReplacer) + "\n"));
+              } else {
+                // Pause stream and schedule resume
+                queryStream.pause();
+                pendingRows.push(row);
+                const delay = interval - elapsed > 0 ? interval - elapsed : 0;
+                setTimeout(() => {
+                  tokens = tokensPerInterval;
+                  lastFill = Date.now();
+                  while (tokens > 0 && pendingRows.length > 0) {
+                    tokens--;
+                    const nextRow = pendingRows.shift();
+                    controller.enqueue(encoder.encode(JSON.stringify(nextRow, jsonBigIntReplacer) + "\n"));
+                  }
+                  queryStream.resume();
+                }, delay);
+              }
+            });
+
+            // Handle end event
+            queryStream.on('end', () => {
+              closed = true;
+              // Flush any remaining pending rows
+              while (pendingRows.length > 0) {
+                controller.enqueue(encoder.encode(JSON.stringify(pendingRows.shift(), jsonBigIntReplacer) + "\n"));
+              }
+              controller.close();
+              conn.release();
+              pool.end();
+            });
+
+            // Handle error events
+            queryStream.on('error', (err: any) => {
+              controller.enqueue(encoder.encode(JSON.stringify({error: err.message}) + "\n"));
+              controller.close();
+              conn.release();
+              pool.end();
+            });
+          } catch (err: any) {
+            controller.enqueue(encoder.encode(JSON.stringify({ error: err.message }) + '\n'));
+            controller.close();
+            conn.release();
+            pool.end();
+          }
+        }
+      });
+
+      return new Response(postgresqlStream, {
+        headers: {
+          'Content-Type': 'application/x-ndjson',
+          'Transfer-Encoding': 'chunked',
+        }
+      });
+    case "mariadb":
+      pool = mariadb.createPool({
+        host: connection.dbHost,
+        port: parseInt(connection.dbPort),
+        user: connection.dbUsername,
+        password: connection.dbPassword,
+        database: connection.dbName,
+        connectionLimit: 10
+      });
+
+      const mariadbStream = new ReadableStream({
+        async start(controller) {
+          try {
+            const connection = await pool.getConnection();
+            const queryStream = connection.queryStream(sql);
+
+            queryStream.on('data', (row: any) => {
+              if (closed) return; // If the stream is closed, do not process further
+              const now = Date.now();
+              const elapsed = now - lastFill;
+
+              if (tokens > 0) {
+                tokens--;
+                controller.enqueue(encoder.encode(JSON.stringify(row, jsonBigIntReplacer) + "\n"));
+              } else {
+                // Pause stream and schedule resume
+                queryStream.pause();
+                pendingRows.push(row);
+                const delay = interval - elapsed > 0 ? interval - elapsed : 0;
+                setTimeout(() => {
+                  tokens = tokensPerInterval;
+                  lastFill = Date.now();
+                  while (tokens > 0 && pendingRows.length > 0) {
+                    tokens--;
+                    const nextRow = pendingRows.shift();
+                    controller.enqueue(encoder.encode(JSON.stringify(nextRow, jsonBigIntReplacer) + "\n"));
+                  }
+                  queryStream.resume();
+                }, delay);
+              }
+            });
+
+            queryStream.on('end', () => {
+              closed = true;
+              // Flush any remaining pending rows
+              while (pendingRows.length > 0) {
+                controller.enqueue(encoder.encode(JSON.stringify(pendingRows.shift(), jsonBigIntReplacer) + "\n"));
+              }
+              controller.close();
+              connection.release();
+              pool.end();
+            });
+
+            queryStream.on('error', (err: any) => {
+              controller.enqueue(encoder.encode(JSON.stringify({ error: err.message }) + "\n"));
+              controller.close();
+              connection.release();
+              pool.end();
+            });
+          } catch (error) {
+            controller.enqueue(encoder.encode(JSON.stringify({ error: (error as Error).message }) + "\n"));
+            controller.close();
+            pool.end();
+          }
+        }
+      });
+
+      return new Response(mariadbStream, {
+        headers: {
+          'Content-Type': 'application/x-ndjson',
+          'Transfer-Encoding': 'chunked',
+        }
+      });
+  }
+    throw new Error(`Unsupported database driver: ${connection.dbDriver}`);
+}
+
+function jsonBigIntReplacer(_key: string, value: any) {
+  return typeof value === 'bigint' ? value.toString() : value;
+}
+
 // Add this new function to retrieve the database schema
 export async function getDatabaseSchema(connection: DatabaseConnection): Promise<string> {
   let schema = '';
@@ -574,7 +831,7 @@ async function getMySQLSchema(connection: mysql.Connection, dbName: string): Pro
     const [createTableResult] = await connection.query(`SHOW CREATE TABLE ${table.TABLE_NAME}`);
     const tableResult = createTableResult as any
     const createTableStatement = tableResult[0]['Create Table'];
-    
+
     schema += `${createTableStatement};\n\n`;
   }
   schema += '\n'
@@ -592,10 +849,10 @@ async function getMariaDBSchema(connection: mariadb.Connection, dbName: string):
   let schema = 'Database Type: MariaDB\n\n';
 
   for (const table of tables as any[]) {
-    const [createTableResult] = await connection.query(`SHOW CREATE TABLE ${table.TABLE_NAME}`);
+    const createTableResult = await connection.query(`SHOW CREATE TABLE ${table.TABLE_NAME}`);
     const tableResult = createTableResult as any
     const createTableStatement = tableResult[0]['Create Table'];
-    
+
     schema += `${createTableStatement};\n\n`;
   }
   schema += '\n';

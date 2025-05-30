@@ -4,10 +4,8 @@ import React, {useState, useEffect, useRef, useContext} from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   Tooltip,
@@ -38,7 +36,9 @@ import {
   Check,
   Pencil,
   Loader2,
-  Share2
+  Share2,
+  Ban,
+  ArrowDown
 } from "lucide-react";
 import { format, parseISO, addHours } from "date-fns";
 import ReactMarkdown from 'react-markdown';
@@ -98,6 +98,7 @@ export default function DatabaseQueryApp() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputMessage, setInputMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [isStreaming, setIsStreaming] = useState(false);
   const [conversationId, setConversationId] = useState<number | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingSql, setPendingSql] = useState<{
@@ -126,6 +127,9 @@ export default function DatabaseQueryApp() {
   const [showAuth, setShowAuth] = useState(false);
   const { providerConfig} = useChatProviderConfig();
   const { toast } = useToast();
+  const [stopStreaming, setStopStreaming] = useState(false);
+  const stopStreamingRef = useRef(false);
+  const prevMessagesRef = useRef<Message[]>([]);
 
   useEffect(() => {
     checkSettings();
@@ -146,7 +150,18 @@ export default function DatabaseQueryApp() {
   }, [selectedConnectionId]);
 
   useEffect(() => {
-    scrollToBottom();
+    // Helper to strip result from messages for comparison
+    const stripResult = (msgs: Message[]) =>
+        msgs.map(({ result, ...rest }) => rest);
+
+    const prevStripped = JSON.stringify(stripResult(prevMessagesRef.current));
+    const currStripped = JSON.stringify(stripResult(messages));
+
+    if (prevStripped !== currStripped) {
+      scrollToBottom();
+    }
+
+    prevMessagesRef.current = messages;
   }, [messages]);
 
   useEffect(() => {
@@ -232,6 +247,13 @@ export default function DatabaseQueryApp() {
     if (!inputMessage.trim() || !selectedConnectionId) return;
 
     setIsLoading(true);
+    let metaReceived = false;
+    let meta: { conversationId: number; conversationHistory: any } | null = null;
+    let aiContent = "";
+    setIsStreaming(true);
+    setStopStreaming(false);
+    stopStreamingRef.current = false;
+    let done = false;
 
     try {
       const response = await fetch(`${BASE_PATH}/api/query`, {
@@ -247,46 +269,87 @@ export default function DatabaseQueryApp() {
         })
       });
 
-      const data = await response.json();
+      if (!response.body) throw new Error('No response body');
 
-      if (!response.ok) {
-        throw new Error(data.message || `HTTP error! status: ${response.status}`);
-      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let systemMessageId = Date.now();
 
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      setConversationId(data.conversationId);
-
-      const newMessages = data.conversationHistory.map((msg: Message) => {
-        if (msg.sender === "system" && msg.content.startsWith("```sql")) {
-          let sql = msg.content
-            .replace("```sql", "")
-            .replace("```", "")
-            .trim();
-          if (sql === "") {
-             sql = "Knowledge insufficient, please provide more information."
-          }
-          return { ...msg, sql };
+      while (!done) {
+        if (stopStreamingRef.current) {
+          reader.cancel();
+          break;
         }
-        return msg;
-      });
+        const { value, done: readerDone } = await reader.read();
+        done = readerDone;
+        const chunk = decoder.decode(value, { stream: !done });
 
-      setMessages(newMessages);
+        // Parse event stream
+        const events = chunk.split('\n\n');
+        for (const event of events) {
+          if (event.startsWith('event:meta')) {
+            // Metadata event
+            const dataLine = event.split('\n').find(line => line.startsWith('data:'));
+            if (dataLine) {
+              meta = JSON.parse(dataLine.replace('data:', ''));
+              metaReceived = true;
 
-      if (!conversationId && selectedConnectionId !== null) {
-        const newConversation = {
-          id: data.conversationId,
-          connectionId: selectedConnectionId,
-          title: inputMessage.substring(0, 50) + "...",
-          timestamp: new Date().toISOString(),
-        };
-        
-        // Update cache
-        const currentConversations = conversationsCache.current.get(selectedConnectionId) || [];
-        conversationsCache.current.set(selectedConnectionId, [newConversation, ...currentConversations]);
-        setCurrentConversation([newConversation, ...currentConversations]);
+              setConversationId(meta?.conversationId || null);
+              const newMessages = (meta && Array.isArray(meta.conversationHistory))
+                  ? meta.conversationHistory.map((msg: Message) => {
+                    if (msg.sender === "system" && msg.content.startsWith("```sql")) {
+                      let sql = msg.content.replace("```sql", "").replace("```", "").trim();
+                      if (sql === "") {
+                        sql = "Knowledge insufficient, please provide more information.";
+                      }
+                      return { ...msg, sql };
+                    }
+                    return msg;
+                  })
+                  : [];
+
+              setMessages((prev) => [
+                ...newMessages,
+                { id: systemMessageId, content: "", sender: "system", timestamp: new Date().toISOString() }
+              ]);
+
+              if (!conversationId && meta?.conversationId) {
+                const newConversation = {
+                  id: meta.conversationId,
+                  connectionId: selectedConnectionId,
+                  title: inputMessage.substring(0, 50) + "...",
+                  timestamp: new Date().toISOString(),
+                };
+
+                // Update cache
+                const currentConversations = conversationsCache.current.get(selectedConnectionId) || [];
+                conversationsCache.current.set(selectedConnectionId, [newConversation, ...currentConversations]);
+                setCurrentConversation([newConversation, ...currentConversations]);
+              }
+            }
+          } else if (metaReceived) {
+            // AI response event (append to content)
+            aiContent += event;
+            // Update your UI with aiContent
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.id === systemMessageId
+                        ? { ...msg, content: aiContent }
+                        : msg
+                )
+            );
+          }
+        }
+        // break if done
+        if (done) {
+          handleConversationClick({
+            id: meta?.conversationId || 0,
+            title: inputMessage.substring(0, 50) + "...",
+            connectionId: selectedConnectionId,
+            timestamp: new Date().toISOString()
+          })
+          break;
+        }
       }
     } catch (error) {
       console.error("Error executing query:", error);
@@ -302,6 +365,9 @@ export default function DatabaseQueryApp() {
     } finally {
       setInputMessage("");
       setIsLoading(false);
+      setIsStreaming(false);
+      setStopStreaming(false);
+      stopStreamingRef.current = false;
     }
   };
 
@@ -338,6 +404,10 @@ export default function DatabaseQueryApp() {
   };
 
   const executeSql = async (sql: string, messageId: number) => {
+    setIsStreaming(true);
+    setStopStreaming(false);
+    stopStreamingRef.current = false;
+
     if (!selectedConnectionId) {
       setMessages((prev) =>
         prev.map((msg) =>
@@ -362,22 +432,73 @@ export default function DatabaseQueryApp() {
         body: JSON.stringify({ sql, connectionId: selectedConnectionId })
       });
 
-      const data = await response.json();
+      // Streaming response handling
+      if (response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let done = false;
+        let buffer = "";
+        let rows: any[] = [];
 
-      if (!response.ok) {
-        throw new Error(
-          data.details?.sqlMessage ||
-            data.message ||
-            data.error ||
-            "An error occurred while executing the SQL query."
+        while (!done) {
+          if (stopStreamingRef.current) {
+            reader.cancel();
+            break;
+          }
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+          if (value) {
+            buffer += decoder.decode(value, { stream: !done });
+            let lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+            for (const line of lines) {
+              if (line.trim()) {
+                const row = JSON.parse(line);
+                rows.push(row);
+                setMessages((prev) =>
+                    prev.map((msg) =>
+                        msg.id === messageId
+                            ? { ...msg, result: [...rows] }
+                            : msg
+                    )
+                );
+              }
+            }
+          }
+          // break if done
+            if (done) {
+                break;
+            }
+        }
+        // Handle any remaining buffered line
+        if (buffer.trim()) {
+          const row = JSON.parse(buffer);
+          rows.push(row);
+          setMessages((prev) =>
+              prev.map((msg) =>
+                  msg.id === messageId
+                      ? { ...msg, result: [...rows] }
+                      : msg
+              )
+          );
+        }
+      } else {
+        // fallback for non-streaming
+        const data = await response.json();
+        if (!response.ok) {
+          throw new Error(
+              data.details?.sqlMessage ||
+              data.message ||
+              data.error ||
+              "An error occurred while executing the SQL query."
+          );
+        }
+        setMessages((prev) =>
+            prev.map((msg) =>
+                msg.id === messageId ? { ...msg, result: data.result } : msg
+            )
         );
       }
-
-      setMessages((prev) =>
-        prev.map((msg) =>
-          msg.id === messageId ? { ...msg, result: data.result } : msg
-        )
-      );
     } catch (error) {
       console.error("Error running SQL:", error);
       const errorMessage =
@@ -389,6 +510,10 @@ export default function DatabaseQueryApp() {
             : msg
         )
       );
+    } finally {
+      setIsStreaming(false);
+      setStopStreaming(false);
+      stopStreamingRef.current = false;
     }
   };
 
@@ -647,70 +772,67 @@ export default function DatabaseQueryApp() {
     const renderResult = () => {
       if (!message.result) return null;
 
-      if (Array.isArray(message.result)) {
-        if (message.result.length === 0) {
-          return (
-            <Alert>
-              <AlertTitle>No Results</AlertTitle>
-              <AlertDescription>
-                The query returned no results.
-              </AlertDescription>
-            </Alert>
-          );
-        }
-        return (
-          <table className="w-full table-auto">
-            <thead>
-              <tr className="bg-gray-50">
-                {Object.keys(message.result[0]).map((key) => (
-                  <th
-                    key={key}
-                    className={`px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap ${key === 'error' ? errorClass : ""}`}
-                  >
-                    {key}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {message.result.map((row, index) => (
-                <tr
-                  key={index}
-                  className={`${
-                      row.error ? errorClass : index % 2 === 0 ? "bg-white" : "bg-gray-50"}
-                      `}
-                >
-                  {Object.values(row).map((value, idx) => (
-                    <td
-                      key={idx}
-                      className="px-4 py-2 whitespace-nowrap text-sm text-gray-900"
-                    >
-                      {String(value)}
-                    </td>
-                  ))}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        );
-      } else if ("affectedRows" in message.result) {
-        return (
-          <Alert>
-            <AlertTitle>Query Executed Successfully</AlertTitle>
-            <AlertDescription>
-              Affected rows: {message.result.affectedRows}
-            </AlertDescription>
-          </Alert>
-        );
-      } else {
-        return (
-          <Alert variant="destructive">
-            <AlertTitle>Error</AlertTitle>
-            <AlertDescription>{message.result.error}</AlertDescription>
-          </Alert>
-        );
-      }
-    };
+      return (
+          <div className="max-h-[300px] overflow-auto">
+            {Array.isArray(message.result) ? (
+                message.result.length === 0 ? (
+                    <Alert>
+                      <AlertTitle>No Results</AlertTitle>
+                      <AlertDescription>
+                        The query returned no results.
+                      </AlertDescription>
+                    </Alert>
+                ) : (
+                    <table className="w-full table-auto min-w-max">
+                      <thead>
+                      <tr className="bg-gray-50">
+                        {Object.keys(message.result[0]).map((key) => (
+                            <th
+                                key={key}
+                                className={`px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap ${key === 'error' ? errorClass : ""}`}
+                            >
+                              {key}
+                            </th>
+                        ))}
+                      </tr>
+                      </thead>
+                      <tbody>
+                      {message.result.map((row, index) => (
+                          <tr
+                              key={index}
+                              className={`${
+                                  row.error ? errorClass : index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                              }`}
+                          >
+                            {Object.values(row).map((value, idx) => (
+                                <td
+                                    key={idx}
+                                    className="px-4 py-2 whitespace-nowrap text-sm text-gray-900"
+                                >
+                                  {String(value)}
+                                </td>
+                            ))}
+                          </tr>
+                      ))}
+                      </tbody>
+                    </table>
+                )
+            ) : "affectedRows" in message.result ? (
+                <Alert>
+                  <AlertTitle>Query Executed Successfully</AlertTitle>
+                  <AlertDescription>
+                    Affected rows: {message.result.affectedRows}
+                  </AlertDescription>
+                </Alert>
+            ) : (
+                <Alert variant="destructive">
+                  <AlertTitle>Error</AlertTitle>
+                  <AlertDescription>{message.result.error}</AlertDescription>
+                </Alert>
+            )}
+          </div>
+      );
+    }
 
     // Map provider names to image paths
     const providerImageMap: { [key: string]: string } = {
@@ -978,12 +1100,21 @@ export default function DatabaseQueryApp() {
 
           <div className="flex-1 flex flex-col h-[calc(100vh-120px)]">
             <Card className="flex-1 flex flex-col bg-white shadow-lg">
-              <CardContent className="flex-1 overflow-hidden p-4">
+              <CardContent className="flex-1 overflow-hidden p-4 relative">
                 <ScrollArea className="h-full pr-4">
                   <div className="space-y-4 h-[calc(80vh-65px)]">
                     {messages.map(renderMessage)}
                     <div ref={messagesEndRef} />
                   </div>
+                  <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={scrollToBottom}
+                      aria-label="Scroll to Bottom"
+                      className="absolute bottom-0 right-4 z-10 shadow-lg"
+                  >
+                    <ArrowDown className="w-4 h-4 mr-1" />
+                  </Button>
                 </ScrollArea>
               </CardContent>
               <CardContent className="p-4 border-t border-gray-200 bg-gray-50">
@@ -1001,6 +1132,7 @@ export default function DatabaseQueryApp() {
                     className="flex-1 min-h-[60px] max-h-[200px] resize-y"
                     disabled={!selectedConnectionId}
                   />
+                  <div className="flex flex-col items-end">
                   <Button
                     onClick={handleSendMessage}
                     disabled={isLoading || !selectedConnectionId}
@@ -1013,6 +1145,21 @@ export default function DatabaseQueryApp() {
                     )}
                     Send
                   </Button>
+                  {isStreaming && (
+                      <Button
+                          onClick={() => {
+                            setStopStreaming(true);
+                            stopStreamingRef.current = true;
+                          }}
+                          variant="destructive"
+                          className="mt-2"
+                          size="icon"
+                          aria-label="Stop Streaming"
+                      >
+                        <Ban className="w-3 h-3" />
+                      </Button>
+                  )}
+                  </div>
                 </div>
                 {!selectedConnectionId && (
                   <Alert variant="destructive" className="mt-4">
