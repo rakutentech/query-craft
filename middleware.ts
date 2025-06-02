@@ -35,8 +35,8 @@ export async function middleware(request: NextRequest) {
 
   // Check session for protected pages
   if (!token?.sub) {
-    const url = new URL('/auth/signin', request.url);
-    url.searchParams.set('callbackUrl', request.url);
+    const url = new URL('/auth/signin', process.env.NEXTAUTH_URL || request.url);
+    url.searchParams.set('callbackUrl', process.env.NEXTAUTH_URL || request.url);
     return NextResponse.redirect(url);
   }
 
