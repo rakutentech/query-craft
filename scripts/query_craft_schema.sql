@@ -89,7 +89,7 @@ CREATE TABLE IF NOT EXISTS database_connections (
     dbUsername TEXT,
     dbPassword TEXT,
     dbName TEXT,
-    `schema` TEXT,
+    `schema` LONGTEXT,
     tag TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
