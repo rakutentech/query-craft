@@ -5,12 +5,21 @@ import {AI_PROVIDER_ERROR} from "@/constants/error";
 
 const proxyURL = process.env.PROXY_URL!;
 
-export async function generateAzureChatResponse(azureConfig: any, messages: OpenAI.Chat.ChatCompletionMessageParam[]): Promise<string> {
+// Add a sleep utility
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+export async function generateAzureChatResponse(
+  azureConfig: any,
+  messages: OpenAI.Chat.ChatCompletionMessageParam[],
+): Promise<ReadableStream> {
   try {
-    const apiKey = azureConfig.mode === "Built-in" ? process.env.AZURE_OPENAI_API_KEY : azureConfig.apiKey;
-    const endpoint = azureConfig.mode === "Built-in" ? process.env.AZURE_OPENAI_ENDPOINT : azureConfig.endpoint;
-    const model = azureConfig.mode === "Built-in" ? process.env.AZURE_OPENAI_DEPLOYMENT_ID : azureConfig.model;
-    const apiVersion = azureConfig.mode === "Built-in" ? process.env.AZURE_OPENAI_API_VERSION : azureConfig.apiVersion;
+    const isBuiltIn = azureConfig.mode === "Built-in";
+    const apiKey = isBuiltIn ? process.env.AZURE_OPENAI_API_KEY : azureConfig.apiKey;
+    const endpoint = isBuiltIn ? process.env.AZURE_OPENAI_ENDPOINT : azureConfig.endpoint;
+    const model = isBuiltIn ? process.env.AZURE_OPENAI_DEPLOYMENT_ID : azureConfig.model;
+    const apiVersion = isBuiltIn ? process.env.AZURE_OPENAI_API_VERSION : azureConfig.apiVersion;
 
     let clientOptions: ClientOptions = {
       apiKey: apiKey,
@@ -19,18 +28,32 @@ export async function generateAzureChatResponse(azureConfig: any, messages: Open
       defaultHeaders: { 'api-key': apiKey },
       httpAgent: proxyURL ? new HttpsProxyAgent(proxyURL) : undefined,
       timeout: 6000
-    }
+    };
 
     const openai = new OpenAI(clientOptions);
 
-    const completion = await openai.chat.completions.create({
+    const streamResponse = await openai.chat.completions.create({
       model: model,
       messages: messages,
+      stream: true,
     });
 
-    return completion.choices[0]?.message?.content || "No response generated.";
+    const encoder = new TextEncoder();
+
+    return new ReadableStream({
+      async start(controller) {
+        for await (const chunk of streamResponse) {
+          const content = chunk.choices[0]?.delta?.content || '';
+          controller.enqueue(encoder.encode(content));
+          // Slow down streaming: 30ms delay per chunk
+          await sleep(30);
+        }
+        controller.close();
+      },
+    });
   } catch (error) {
-    console.dir(error)
+    console.dir(error);
     console.error("Error calling Azure OpenAI:", error);
-    throw new Error(`${AI_PROVIDER_ERROR}: ${error instanceof Error ? error.message : String(error)}`);  }
+    throw new Error(`${AI_PROVIDER_ERROR}: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }

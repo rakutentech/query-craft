@@ -1,8 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { executeQuery } from '@/app/lib/db';
-import { FieldPacket, QueryError } from 'mysql2';
-import { getServerSession } from 'next-auth';
-import { authOptions } from '@/app/lib/auth';
+import {NextRequest, NextResponse} from 'next/server';
+import {executeQueryStream} from '@/app/lib/db';
+import {getServerSession} from 'next-auth';
+import {authOptions} from '@/app/lib/auth';
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,8 +18,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const result = await executeQuery(sql, connectionId, userId);
-    return NextResponse.json({ result });
+    return await executeQueryStream(sql, connectionId, userId);
   } catch (error) {
     console.error('Error executing SQL:', error);
     return NextResponse.json(

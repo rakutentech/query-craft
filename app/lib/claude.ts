@@ -11,31 +11,54 @@ class CustomAnthropic extends Anthropic {
     }
 }
 
-export async function generateClaudeChatResponse(claudeConfig: any, systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): Promise<string> {
-    const apiKey = claudeConfig.mode === "Built-in" ? process.env.CLAUDE_API_KEY : claudeConfig.apiKey;
-    const endpoint = claudeConfig.mode === "Built-in" ? process.env.CLAUDE_ENDPOINT : claudeConfig.endpoint;
-    const model = claudeConfig.mode === "Built-in" ? process.env.CLAUDE_MODEL : claudeConfig.model;
+// Add a sleep utility
+function sleep(ms: number) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 
-    if (!apiKey || !model) {
-        throw new Error("Claude configuration is incomplete. Please provide an API key and model.");
-    }
-
-    const anthropic = new CustomAnthropic({
-        apiKey,
-        baseUrl: endpoint
-    });
-
+export async function generateClaudeChatResponse(claudeConfig: any, systemPrompt: string, messages: Anthropic.Messages.MessageParam[]): Promise<ReadableStream> {
     try {
-        const response = await anthropic.messages.create({
+        const isBuiltIn = claudeConfig.mode === "Built-in";
+        const apiKey = isBuiltIn ? process.env.CLAUDE_API_KEY : claudeConfig.apiKey;
+        const endpoint = isBuiltIn ? process.env.CLAUDE_ENDPOINT : claudeConfig.endpoint;
+        const model = isBuiltIn ? process.env.CLAUDE_MODEL : claudeConfig.model;
+
+        if (!apiKey || !model) {
+            throw new Error("Claude configuration is incomplete. Please provide an API key and model.");
+        }
+
+        const anthropic = new CustomAnthropic({
+            apiKey,
+            baseUrl: endpoint,
+            timeout: 6000,
+            httpAgent: process.env.PROXY_URL ? new URL(process.env.PROXY_URL) : undefined,
+        });
+
+        const encoder = new TextEncoder();
+
+        const stream = await anthropic.messages.stream({
             model,
             max_tokens: 1024,
             system: systemPrompt,
             messages: messages,
         });
 
-        return response.content.filter(block => block.type === "text")
-            .map(block => block.text)
-            .join("");
+        return new ReadableStream({
+            async start(controller) {
+                try {
+                    for await (const chunk of stream) {
+                        if (chunk.type === "content_block_delta" && chunk.delta?.type === "text_delta") {
+                            controller.enqueue(encoder.encode(chunk.delta.text));
+                            // Slow down streaming: 30ms delay per chunk
+                            await sleep(30);
+                        }
+                    }
+                    controller.close();
+                } catch (err) {
+                    controller.error(err);
+                }
+            }
+        });
     } catch (error) {
         console.error("Error calling Claude API:", error);
         throw new Error(`${AI_PROVIDER_ERROR}: ${error instanceof Error ? error.message : String(error)}`);
