@@ -1,5 +1,6 @@
 // lib/openai.ts
 import { OpenAI } from "openai";
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import {AI_PROVIDER_ERROR} from "@/constants/error";
 
 // Add a sleep utility
