@@ -31,14 +31,13 @@ export async function generateClaudeChatResponse(claudeConfig: any, systemPrompt
             apiKey,
             baseUrl: endpoint,
             timeout: 6000,
-            httpAgent: process.env.PROXY_URL ? new URL(process.env.PROXY_URL) : undefined,
+            httpAgent: process.env.PROXY_URL ? new HttpsProxyAgent(process.env.PROXY_URL) : undefined,
         });
 
         const encoder = new TextEncoder();
 
         const stream = await anthropic.messages.stream({
             model,
-            max_tokens: 1024,
             system: systemPrompt,
             messages: messages,
         });

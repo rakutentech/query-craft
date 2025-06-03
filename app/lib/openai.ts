@@ -18,7 +18,7 @@ export async function generateOpenAIChatResponse(openaiConfig: any, messages:  O
             apiKey: apiKey,
             baseURL: endpoint || 'https://api.openai.com/v1',
             timeout: 6000,
-            httpAgent: process.env.PROXY_URL ? new URL(process.env.PROXY_URL) : undefined,
+            httpAgent: process.env.PROXY_URL ? new HttpsProxyAgent(process.env.PROXY_URL) : undefined,
         });
 
         const streamResponse = await openai.chat.completions.create({
