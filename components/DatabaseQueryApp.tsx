@@ -1264,7 +1264,7 @@ export default function DatabaseQueryApp() {
                   <div className="flex flex-col items-end">
                   <Button
                     onClick={handleSendMessage}
-                    disabled={isLoading || !selectedConnectionId}
+                    disabled={isLoading || isStreaming || !selectedConnectionId}
                     className="bg-blue-600 hover:bg-blue-700 text-white"
                   >
                     {isLoading ? (
