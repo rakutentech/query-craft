@@ -1,5 +1,6 @@
 // lib/claude.ts
 import { Anthropic, ClientOptions } from '@anthropic-ai/sdk';
+import { HttpsProxyAgent } from 'https-proxy-agent';
 import {AI_PROVIDER_ERROR} from "@/constants/error";
 
 class CustomAnthropic extends Anthropic {
@@ -31,14 +32,14 @@ export async function generateClaudeChatResponse(claudeConfig: any, systemPrompt
             apiKey,
             baseUrl: endpoint,
             timeout: 6000,
-            httpAgent: process.env.PROXY_URL ? new URL(process.env.PROXY_URL) : undefined,
+            httpAgent: process.env.PROXY_URL ? new HttpsProxyAgent(process.env.PROXY_URL) : undefined,
         });
 
         const encoder = new TextEncoder();
 
         const stream = await anthropic.messages.stream({
             model,
-            max_tokens: 1024,
+            max_tokens: 10240,
             system: systemPrompt,
             messages: messages,
         });
