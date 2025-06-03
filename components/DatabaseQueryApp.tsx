@@ -1064,21 +1064,23 @@ export default function DatabaseQueryApp() {
 
         <div className="flex space-x-6">
           <div className="w-1/4 min-w-[250px]">
-            <Card className="mb-4">
-            <CardHeader className="border-b border-gray-200">
+            <Card className="mb-2 h-[calc(110vh-420px)]">
+              <CardHeader className="border-b border-gray-200 pb-2">
                 <div className="flex justify-between items-center">
                   <h2 className="text-xl font-semibold text-gray-800">
                     Databases
                   </h2>
                 </div>
-              </CardHeader> 
-              <CardContent>
+              </CardHeader>
+              <CardContent className="pt-2 pb-2">
                 {uniqueTags.length > 0 && (
-                  <div className="mb-4 mt-2">
-                    <div className="flex flex-wrap gap-2 h-20 overflow-y-auto">
+                  <div className="mb-2 mt-1">
+                    <div className="text-xs font-semibold text-gray-600 mb-2">Filter by Tags</div>
+                    <div className="flex flex-wrap gap-1 overflow-y-auto">
                       <Button
                         variant={!selectedTag ? "default" : "outline"}
                         size="sm"
+                        className="px-2 py-1 text-xs"
                         onClick={() => handleTagSelect(null)}
                       >
                         All
@@ -1088,6 +1090,7 @@ export default function DatabaseQueryApp() {
                           key={tag}
                           variant={selectedTag === tag ? "default" : "outline"}
                           size="sm"
+                          className="px-2 py-1 text-xs"
                           onClick={() => handleTagSelect(tag)}
                         >
                           {tag}
@@ -1096,8 +1099,8 @@ export default function DatabaseQueryApp() {
                     </div>
                   </div>
                 )}
-                <ScrollArea className="h-[120px]">
-                  <ul className="space-y-2">
+                <ScrollArea className="h-[calc(100vh-500px)]">
+                  <ul className="space-y-1">
                     {filteredConnections.map((connection) => (
                       <li key={connection.id}>
                         <Button
@@ -1106,7 +1109,7 @@ export default function DatabaseQueryApp() {
                               ? "default"
                               : "outline"
                           }
-                          className="w-full justify-start"
+                          className="w-full justify-start px-2 py-1 text-xs h-8"
                           onClick={() => handleConnectionSelect(connection.id)}
                         >
                           <Database className="mr-2 h-4 w-4" />
@@ -1119,39 +1122,36 @@ export default function DatabaseQueryApp() {
               </CardContent>
             </Card>
 
-            <Card className="h-[calc(100vh-440px)] bg-white shadow-lg">
-              <CardHeader className="border-b border-gray-200">
+            <Card className="h-[220px] bg-white shadow-lg">
+              <CardHeader className="border-b border-gray-200 py-2">
                 <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-semibold text-gray-800">
+                  <h2 className="text-lg font-semibold text-gray-800">
                     History
                   </h2>
                   <Button
                     onClick={handleNewConversation}
                     variant="outline"
                     size="sm"
-                    className="text-blue-600 border-blue-600 hover:bg-blue-50"
+                    className="text-blue-600 border-blue-600 hover:bg-blue-50 px-2 py-1 text-xs"
                   >
                     New Chat
                   </Button>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
-                <ScrollArea className="h-[calc(99vh-500px)] overflow-y-auto">
+                <ScrollArea className="h-[140px] overflow-y-auto">
                   <ul className="divide-y divide-gray-200">
                     {selectedConnectionId &&
-                      currentConversation?.map(
-                        (conversation) => (
+                      currentConversation?.map((conversation) => (
                           <li
                             key={conversation.id}
-                            className={`p-3 cursor-pointer hover:bg-blue-50 transition-colors duration-150 ${
-                              conversation.id === conversationId
-                                ? "bg-blue-100"
-                                : ""
+                            className={`px-2 py-1 cursor-pointer hover:bg-blue-50 transition-colors duration-150 text-xs flex items-center min-h-[32px] ${
+                              conversation.id === conversationId ? "bg-blue-100" : ""
                             }`}
                           >
-                            <div className="flex items-center justify-between">
+                            <div className="flex items-center justify-between w-full">
                               {editingTitleId === conversation.id ? (
-                                <div className="flex-1 mr-2">
+                                <div className="flex-1 mr-1">
                                   <Input
                                     value={editingTitle}
                                     onChange={(e) => setEditingTitle(e.target.value)}
@@ -1163,30 +1163,30 @@ export default function DatabaseQueryApp() {
                                         setEditingTitle("");
                                       }
                                     }}
-                                    className="h-8"
+                                    className="h-6 text-xs px-1"
                                     autoFocus
                                   />
                                 </div>
                               ) : (
                                 <div
-                                  className="flex-1"
+                                  className="flex-1 truncate"
                                   onClick={() => handleConversationClick(conversation)}
                                 >
-                                  <p className="font-medium text-gray-800 truncate">
+                                  <p className="font-medium text-gray-800 truncate text-xs">
                                     {conversation.title}
                                   </p>
                                 </div>
                               )}
-                              <div className="flex items-center space-x-2">
+                              <div className="flex items-center space-x-1">
                                 {editingTitleId === conversation.id ? (
                                   <>
                                     <Button
                                       variant="ghost"
                                       size="icon"
                                       onClick={() => handleTitleSave(conversation.id)}
-                                      className="h-8 w-8"
+                                      className="h-6 w-6"
                                     >
-                                      <Check className="h-4 w-4" />
+                                      <Check className="h-3 w-3" />
                                     </Button>
                                     <Button
                                       variant="ghost"
@@ -1195,9 +1195,9 @@ export default function DatabaseQueryApp() {
                                         setEditingTitleId(null);
                                         setEditingTitle("");
                                       }}
-                                      className="h-8 w-8"
+                                      className="h-6 w-6"
                                     >
-                                      <RotateCcw className="h-4 w-4" />
+                                      <RotateCcw className="h-3 w-3" />
                                     </Button>
                                   </>
                                 ) : (
@@ -1208,16 +1208,13 @@ export default function DatabaseQueryApp() {
                                       e.stopPropagation();
                                       handleTitleEdit(conversation);
                                     }}
-                                    className="h-8 w-8 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                                    className="h-6 w-6 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
                                   >
-                                    <Pencil className="h-4 w-4" />
+                                    <Pencil className="h-3 w-3" />
                                   </Button>
                                 )}
                               </div>
                             </div>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {formatJapanTime(conversation.timestamp)}
-                            </p>
                           </li>
                         )
                       )}
@@ -1246,7 +1243,7 @@ export default function DatabaseQueryApp() {
                   </Button>
                 </ScrollArea>
               </CardContent>
-              <CardContent className="p-4 border-t border-gray-200 bg-gray-50">
+              <CardContent className="p-3 border-t border-gray-200 bg-gray-50 border-t-gray-200 rounded-b-lg">
                 <div className="flex space-x-2">
                   <Textarea
                     value={inputMessage}
@@ -1258,7 +1255,7 @@ export default function DatabaseQueryApp() {
                         handleSendMessage();
                       }
                     }}
-                    className="flex-1 min-h-[60px] max-h-[200px] resize-y"
+                    className="flex-1 min-h-[30px] max-h-[100px] resize-y"
                     disabled={!selectedConnectionId}
                   />
                   <div className="flex flex-col items-end">
