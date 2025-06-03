@@ -66,7 +66,7 @@ const DEFAULT_SYSTEM_PROMPT = `You are an AI assistant specialized in converting
    - Implement WHERE clauses to filter data based on requirements
    - Utilize aggregate functions (COUNT, SUM, AVG, etc.) and GROUP BY clauses when appropriate
    - Apply ORDER BY clauses to sort results as needed
-   - Use LIMIT clauses to restrict the number of results when appropriate
+   - MUST LIMIT clauses to restrict the number of results
 
 3. Always reference the provided database schema when generating queries. If a user asks about tables or columns not present in the schema, generate a query using the closest matching available tables and columns.
 
@@ -123,6 +123,7 @@ export default function SettingsPage() {
   const { providerConfig } = useChatProviderConfig(); // Access providerConfig
   const [showSchemaConfirmDialog, setShowSchemaConfirmDialog] = useState(false);
   const [connectionsWithoutSchema, setConnectionsWithoutSchema] = useState<number[]>([]);
+  const [testingConnection, setTestingConnection] = useState<number | null>(null);
 
   useEffect(() => {
     fetchSettings();
@@ -278,6 +279,7 @@ export default function SettingsPage() {
       setError("Please fill in all required fields");
       return false;
     }
+    setTestingConnection(index); // Show loading
     const connection = settings.databaseConnections[index];
     try {
       const response = await fetch(`${BASE_PATH}/api/connections`, {
@@ -319,6 +321,8 @@ export default function SettingsPage() {
         [index]: (error as any).message || "Connection test failed"
       }));
       return false;
+    } finally {
+      setTestingConnection(null); // Hide loading
     }
   };
 
@@ -674,8 +678,15 @@ export default function SettingsPage() {
                     <Button
                       onClick={() => testAndSaveConnection(index)}
                       className="float-right text-sm font-medium text-gray-900 focus:outline-none bg-white rounded-full border border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-4 focus:ring-gray-100"
+                      disabled={testingConnection === index}
                     >
-                      Test
+                      {testingConnection === index ? (
+                        <>
+                          <Spinner className="mr-2" /> 
+                        </>
+                      ) : (
+                        "Test"
+                      )}
                     </Button>
                   </div>
                 </CardContent>

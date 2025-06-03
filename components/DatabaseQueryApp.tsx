@@ -1064,7 +1064,7 @@ export default function DatabaseQueryApp() {
 
         <div className="flex space-x-6">
           <div className="w-1/4 min-w-[250px]">
-            <Card className="mb-2 h-[calc(110vh-420px)]">
+            <Card className="mb-2 h-[calc(100vh-350px)]">
               <CardHeader className="border-b border-gray-200 pb-2">
                 <div className="flex justify-between items-center">
                   <h2 className="text-xl font-semibold text-gray-800">
