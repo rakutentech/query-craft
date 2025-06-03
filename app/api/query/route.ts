@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
-  executeQuery,
   addMessage,
   createConversation,
   getConversationMessages,
@@ -9,8 +8,6 @@ import {
   getUserConnectionById
 } from "@/app/lib/db";
 import {Message} from "ollama";
-import {generateOllamaChatResponse} from "@/app/lib/ollama";
-import {generateAzureChatResponse} from "@/app/lib/azure-ai";
 import OpenAI from "openai";
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/lib/auth';
@@ -18,7 +15,9 @@ import {Anthropic} from "@anthropic-ai/sdk";
 import {generateClaudeChatResponse} from "@/app/lib/claude";
 import {generateOpenAIChatResponse} from "@/app/lib/openai";
 import {generateLMStudioChatResponse} from "@/app/lib/lm-studio";
-import {Chat, ChatInput, ChatMessageInput} from "@lmstudio/sdk";
+import {generateOllamaChatResponse} from "@/app/lib/ollama";
+import {generateAzureChatResponse} from "@/app/lib/azure-ai";
+import { ChatInput } from "@lmstudio/sdk";
 
 export async function POST(request: NextRequest) {
   try {
@@ -70,6 +69,10 @@ export async function POST(request: NextRequest) {
     fullSystemPrompt += `\n\nCurrent database connection: ${currentConnection.projectName} (${currentConnection.dbDriver})`;
 
     let aiResponse;
+    let aiStream: ReadableStream;
+    let stream;
+    const encoder = new TextEncoder();
+    let accumulated = "";
 
     // Check providerConfig to determine which provider to use
     switch (providerConfig.selectedProvider) {
@@ -86,9 +89,28 @@ export async function POST(request: NextRequest) {
                   } as OpenAI.Chat.ChatCompletionMessageParam)
           )
         ];
-        // Generate response from Azure OpenAI
-        aiResponse = await generateAzureChatResponse(providerConfig.config.azure, messages);
+
+        aiStream = await generateAzureChatResponse(providerConfig.config.azure, messages);
+        stream = await createAIStream({
+          aiStream,
+          encoder,
+          currentConversationId,
+          conversationId,
+          query,
+          getConversationMessages,
+          addMessage,
+          updateConversationTitle
+        });
+
+        aiResponse = new Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive"
+          }
+        });
         break;
+
       case "Ollama":
         console.log("Ollama config", providerConfig.config.ollama);
         let ollamaMessages: Message[] = [
@@ -102,8 +124,27 @@ export async function POST(request: NextRequest) {
           )
         ];
 
-        aiResponse = await generateOllamaChatResponse(providerConfig.config.ollama, ollamaMessages);
+        aiStream = await generateOllamaChatResponse(providerConfig.config.ollama, ollamaMessages);
+        stream = await createAIStream({
+          aiStream,
+          encoder,
+          currentConversationId,
+          conversationId,
+          query,
+          getConversationMessages,
+          addMessage,
+          updateConversationTitle
+        });
+
+        aiResponse = new Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive"
+          }
+        });
         break;
+
       case "LM Studio":
         console.log("LM Studio config", providerConfig.config.lmStudio);
         // Prepare messages for LM Studio
@@ -118,7 +159,25 @@ export async function POST(request: NextRequest) {
           )
         ];
         // Generate response from LM Studio
-        aiResponse = await generateLMStudioChatResponse(providerConfig.config.lmStudio, lmStudioMessages as ChatInput);
+        aiStream = await generateLMStudioChatResponse(providerConfig.config.lmStudio, lmStudioMessages as ChatInput);
+        stream = await createAIStream({
+          aiStream,
+          encoder,
+          currentConversationId,
+          conversationId,
+          query,
+          getConversationMessages,
+          addMessage,
+          updateConversationTitle
+        });
+
+        aiResponse = new Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive"
+          }
+        });
         break;
       case "Claude":
         console.log("Claude config", providerConfig.config.claude);
@@ -132,8 +191,26 @@ export async function POST(request: NextRequest) {
                   } as Anthropic.Messages.MessageParam)
           )
         ];
-        // Generate response from Claude
-        aiResponse = await generateClaudeChatResponse(providerConfig.config.claude, fullSystemPrompt, claudeMessages);
+        // // Generate response from Claude
+        aiStream = await generateClaudeChatResponse(providerConfig.config.claude, fullSystemPrompt, claudeMessages);
+        stream = await createAIStream({
+          aiStream,
+          encoder,
+          currentConversationId,
+          conversationId,
+          query,
+          getConversationMessages,
+          addMessage,
+          updateConversationTitle
+        });
+
+        aiResponse = new Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive"
+          }
+        });
         break;
       case "OpenAI":
         console.log("OpenAI config", providerConfig.config.openai);
@@ -157,8 +234,26 @@ export async function POST(request: NextRequest) {
                   } as OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam)
           ),
         ];
-        // Generate response from OpenAI
-        aiResponse = await generateOpenAIChatResponse(providerConfig.config.openai, openaiMessages);
+
+        aiStream = await generateOpenAIChatResponse(providerConfig.config.openai, openaiMessages);
+        stream = await createAIStream({
+          aiStream,
+          encoder,
+          currentConversationId,
+          conversationId,
+          query,
+          getConversationMessages,
+          addMessage,
+          updateConversationTitle
+        });
+
+        aiResponse = new Response(stream, {
+          headers: {
+            "Content-Type": "text/event-stream",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive"
+          }
+        });
         break;
       default:
         console.error("Unsupported provider");
@@ -168,27 +263,7 @@ export async function POST(request: NextRequest) {
         );
     }
 
-    // Add AI response to the conversation
-    await addMessage(currentConversationId, aiResponse, "system");
-
-    // Update conversation title if it's a new conversation
-    if (!conversationId) {
-      await updateConversationTitle(
-        currentConversationId,
-        query.substring(0, 50) + "..."
-      );
-    }
-
-    // Get updated conversation history
-    const updatedConversationHistory = await getConversationMessages(
-      currentConversationId
-    );
-
-    return NextResponse.json({
-      result: aiResponse,
-      conversationId: currentConversationId,
-      conversationHistory: updatedConversationHistory
-    });
+    return aiResponse;
   } catch (error: unknown) {
     console.error("Error processing query:", error);
     let errorMessage = "An unknown error occurred";
@@ -211,4 +286,52 @@ export async function POST(request: NextRequest) {
       { status: statusCode }
     );
   }
+}
+
+async function createAIStream({
+                                aiStream,
+                                encoder,
+                                currentConversationId,
+                                conversationId,
+                                query,
+                                getConversationMessages,
+                                addMessage,
+                                updateConversationTitle
+                              }: {
+  aiStream: ReadableStream;
+  encoder: TextEncoder;
+  currentConversationId: number;
+  conversationId: number | undefined;
+  query: string;
+  getConversationMessages: (id: number) => Promise<any>;
+  addMessage: (id: number, content: string, sender: "user" | "system") => Promise<void>;
+  updateConversationTitle: (id: number, title: string) => Promise<void>;
+}) {
+  let accumulated = "";
+  return new ReadableStream({
+    async start(controller) {
+      // Send meta event at the start
+      controller.enqueue(encoder.encode(`event:meta\ndata:${JSON.stringify({
+        conversationId: currentConversationId,
+        conversationHistory: await getConversationMessages(currentConversationId)
+      })}\n\n`));
+
+      const reader = aiStream.getReader();
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        const chunk = typeof value === "string" ? value : new TextDecoder().decode(value);
+        accumulated += chunk;
+        controller.enqueue(typeof value === "string" ? encoder.encode(value) : value);
+      }
+      controller.close();
+
+      // Store the full response in conversation history
+      await addMessage(currentConversationId, accumulated, "system");
+      // Optionally update conversation title if new
+      if (!conversationId) {
+        await updateConversationTitle(currentConversationId, query.substring(0, 50) + "...");
+      }
+    }
+  });
 }

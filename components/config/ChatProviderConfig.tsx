@@ -18,6 +18,8 @@ function ChatProviderConfig() {
     const [ollamaModels, setOllamaModels] = useState<string[]>([]);
     const [lmStudioModels, setLMStudioModels] = useState<string[]>([]);
 
+    const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
+
     const getChatProviderConfigFromCookie = (): any | null => {
         const cookieValue = Cookies.get("chatProviderConfig");
         if (cookieValue) {
@@ -93,12 +95,6 @@ function ChatProviderConfig() {
         loadFromCookies();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [setProviderConfig, setOllamaModels, setLMStudioModels]);
-
-    useEffect(() => {
-        fetchOllamaModels();
-        fetchLMStudioModels();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     const fetchOllamaModels = async () => {
         try {
@@ -183,6 +179,9 @@ function ChatProviderConfig() {
                     endpoint: prevConfig.config.ollama?.endpoint || "http://localhost:11434", // Default local endpoint
                     model: prevConfig.config.ollama?.model || "", // Retain model if already set
                 };
+
+                // Fetch Ollama models when Ollama is selected
+                fetchOllamaModels();
             }
 
             if (provider === "LM Studio") {
@@ -190,6 +189,9 @@ function ChatProviderConfig() {
                     endpoint: "http://localhost:1234", // Default endpoint
                     model: prevConfig.config.lmStudio?.model || "", // Retain model if already set
                 };
+
+                // Fetch LM Studio models when LM Studio is selected
+                fetchLMStudioModels();
             }
             return updatedConfig;
         });
@@ -229,7 +231,7 @@ function ChatProviderConfig() {
 
         try {
             if (providerConfig.selectedProvider === "Azure OpenAI") {
-                const res = await fetch('/api/provider/azure', {
+                const res = await fetch(`${BASE_PATH}/api/provider/azure`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -242,7 +244,7 @@ function ChatProviderConfig() {
                     return;
                 }
             } else if (providerConfig.selectedProvider === "Claude") {
-                const res = await fetch('/api/provider/claude', {
+                const res = await fetch(`${BASE_PATH}/api/provider/claude`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -256,7 +258,7 @@ function ChatProviderConfig() {
                     return;
                 }
             } else if (providerConfig.selectedProvider === "Ollama") {
-                const res = await fetch('/api/provider/ollama', {
+                const res = await fetch(`${BASE_PATH}/api/provider/ollama`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -269,7 +271,7 @@ function ChatProviderConfig() {
                     return;
                 }
             } else if (providerConfig.selectedProvider === "LM Studio") {
-                const res = await fetch('/api/provider/lmstudio', {
+                const res = await fetch(`${BASE_PATH}/api/provider/lmstudio`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -282,7 +284,7 @@ function ChatProviderConfig() {
                     return;
                 }
             } else if (providerConfig.selectedProvider === "OpenAI") {
-                const res = await fetch('/api/provider/openai', {
+                const res = await fetch(`${BASE_PATH}/api/provider/openai`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({

@@ -4,8 +4,14 @@ import {generateOllamaChatResponse, getOllamaModelList} from '@/app/lib/ollama';
 export async function POST(req: Request) {
     try {
         const { ollamaConfig, messages } = await req.json();
-        const response = await generateOllamaChatResponse(ollamaConfig, messages);
-        return NextResponse.json({ response });
+        const readableStream = await generateOllamaChatResponse(ollamaConfig, messages);
+        return new Response(readableStream, {
+            headers: {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                Connection: 'keep-alive',
+            },
+        });
     } catch (error) {
         console.error('Error in Ollama API route:', error);
         return NextResponse.json({ error: 'Failed to generate response from Ollama' }, { status: 500 });
