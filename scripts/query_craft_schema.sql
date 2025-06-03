@@ -70,12 +70,15 @@ CREATE TABLE IF NOT EXISTS messages (
     INDEX idx_share_token (share_token)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Create settings table
+-- Create settings table (user-specific, retain id as PK)
+DROP TABLE IF EXISTS settings;
 CREATE TABLE IF NOT EXISTS settings (
-    id INT PRIMARY KEY CHECK (id = 1),
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
     systemPrompt TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY unique_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Create database_connections table with user_id
@@ -105,4 +108,4 @@ CREATE TABLE IF NOT EXISTS query_history (
     `sql` TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_user_history (user_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci; 
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
