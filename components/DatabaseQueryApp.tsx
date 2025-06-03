@@ -360,12 +360,6 @@ export default function DatabaseQueryApp() {
         }
         // break if done
         if (done) {
-          handleConversationClick({
-            id: meta?.conversationId || 0,
-            title: inputMessage.substring(0, 50) + "...",
-            connectionId: selectedConnectionId,
-            timestamp: new Date().toISOString()
-          })
           break;
         }
       }
