@@ -360,12 +360,6 @@ export default function DatabaseQueryApp() {
         }
         // break if done
         if (done) {
-          // handleConversationClick({
-          //   id: meta?.conversationId || 0,
-          //   title: inputMessage.substring(0, 50) + "...",
-          //   connectionId: selectedConnectionId,
-          //   timestamp: new Date().toISOString()
-          // })
           break;
         }
       }
@@ -1064,7 +1058,7 @@ export default function DatabaseQueryApp() {
 
         <div className="flex space-x-6">
           <div className="w-1/4 min-w-[250px]">
-            <Card className="mb-2 h-[calc(100vh-350px)]">
+            <Card className="mb-2 h-[calc(100vh-350px)] flex flex-col">
               <CardHeader className="border-b border-gray-200 pb-2">
                 <div className="flex justify-between items-center">
                   <h2 className="text-xl font-semibold text-gray-800">
@@ -1072,57 +1066,60 @@ export default function DatabaseQueryApp() {
                   </h2>
                 </div>
               </CardHeader>
-              <CardContent className="pt-2 pb-2">
-                {uniqueTags.length > 0 && (
-                  <div className="mb-2 mt-1">
-                    <div className="text-xs font-semibold text-gray-600 mb-2">Filter by Tags</div>
-                    <div className="flex flex-wrap gap-1 overflow-y-auto">
-                      <Button
-                        variant={!selectedTag ? "default" : "outline"}
-                        size="sm"
-                        className="px-2 py-1 text-xs"
-                        onClick={() => handleTagSelect(null)}
-                      >
-                        All
-                      </Button>
-                      {uniqueTags.map(tag => (
+              <CardContent className="flex-1 overflow-hidden">
+                <div className="flex flex-col h-full">
+                  {uniqueTags.length > 0 && (
+                    <div className="mb-2 mt-1">
+                      <div className="text-xs font-semibold text-gray-600 mb-2">Filter by Tags</div>
+                      <div className="flex flex-wrap gap-1 overflow-y-auto">
                         <Button
-                          key={tag}
-                          variant={selectedTag === tag ? "default" : "outline"}
+                          variant={!selectedTag ? "default" : "outline"}
                           size="sm"
                           className="px-2 py-1 text-xs"
-                          onClick={() => handleTagSelect(tag)}
+                          onClick={() => handleTagSelect(null)}
                         >
-                          {tag}
+                          All
                         </Button>
-                      ))}
+                        {uniqueTags.map(tag => (
+                          <Button
+                            key={tag}
+                            variant={selectedTag === tag ? "default" : "outline"}
+                            size="sm"
+                            className="px-2 py-1 text-xs"
+                            onClick={() => handleTagSelect(tag)}
+                          >
+                            {tag}
+                          </Button>
+                        ))}
+                      </div>
                     </div>
-                  </div>
-                )}
-                <ScrollArea className="h-[calc(100vh-500px)]">
-                  <ul className="space-y-1">
-                    {filteredConnections.map((connection) => (
-                      <li key={connection.id}>
-                        <Button
-                          variant={
-                            selectedConnectionId === connection.id
-                              ? "default"
-                              : "outline"
-                          }
-                          className="w-full justify-start px-2 py-1 text-xs h-8"
-                          onClick={() => handleConnectionSelect(connection.id)}
-                        >
-                          <Database className="mr-2 h-4 w-4" />
-                          {connection.projectName}
-                        </Button>
-                      </li>
-                    ))}
-                  </ul>
-                </ScrollArea>
+                  )}
+                  
+                  <ScrollArea className="max-h-full flex-grow">
+                    <ul className="space-y-1">
+                      {filteredConnections.map((connection) => (
+                        <li key={connection.id}>
+                          <Button
+                            variant={
+                              selectedConnectionId === connection.id
+                                ? "default"
+                                : "outline"
+                            }
+                            className="w-full justify-start px-2 py-1 text-xs h-8"
+                            onClick={() => handleConnectionSelect(connection.id)}
+                          >
+                            <Database className="mr-2 h-4 w-4" />
+                            {connection.projectName}
+                          </Button>
+                        </li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
+                </div>
               </CardContent>
             </Card>
 
-            <Card className="h-[220px] bg-white shadow-lg">
+            <Card className="h-[245px] bg-white shadow-lg">
               <CardHeader className="border-b border-gray-200 py-2">
                 <div className="flex justify-between items-center">
                   <h2 className="text-lg font-semibold text-gray-800">
