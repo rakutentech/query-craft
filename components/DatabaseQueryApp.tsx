@@ -1095,7 +1095,7 @@ export default function DatabaseQueryApp() {
                     </div>
                   )}
                   
-                  <ScrollArea className="max-h-full flex-grow">
+                  <ScrollArea className="max-h-full flex-grow pt-1">
                     <ul className="space-y-1">
                       {filteredConnections.map((connection) => (
                         <li key={connection.id}>
@@ -1119,7 +1119,7 @@ export default function DatabaseQueryApp() {
               </CardContent>
             </Card>
 
-            <Card className="h-[220px] bg-white shadow-lg">
+            <Card className="h-[245px] bg-white shadow-lg">
               <CardHeader className="border-b border-gray-200 py-2">
                 <div className="flex justify-between items-center">
                   <h2 className="text-lg font-semibold text-gray-800">

@@ -51,7 +51,7 @@ export async function POST(request: NextRequest) {
     );
 
     // Get settings and database connections
-    const settings = await getSettings();
+    const settings = await getSettings(userId);
     const currentConnection = await getUserConnectionById(connectionId, userId);
 
     if (!currentConnection) {

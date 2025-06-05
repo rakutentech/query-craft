@@ -68,7 +68,8 @@ async function initializeDatabase() {
     );
 
     CREATE TABLE IF NOT EXISTS settings (
-      id INTEGER PRIMARY KEY CHECK (id = 1),
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id TEXT NOT NULL UNIQUE,
       systemPrompt TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -115,4 +116,4 @@ async function initializeDatabase() {
 initializeDatabase().catch((error) => {
   console.error("Error initializing database:", error);
   process.exit(1);
-}); 
+});

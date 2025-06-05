@@ -9,7 +9,7 @@ export async function GET() {
     const session = await getServerSession(authOptions);
     const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (session?.user?.id || 'anonymous') : 'anonymous';
 
-    const settings = await getSettings();
+    const settings = await getSettings(userId);
     const databaseConnections = await getDatabaseConnections(userId);
     return NextResponse.json({ settings, databaseConnections });
   } catch (error) {
@@ -37,8 +37,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Save general settings
-    await saveSettings(aiSettings.systemPrompt);
+    // Save user-specific settings
+    await saveSettings(userId, aiSettings.systemPrompt);
 
     // Save or update database connections
     for (const connection of databaseConnections) {

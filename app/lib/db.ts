@@ -57,7 +57,7 @@ export interface Conversation {
 }
 
 export interface Settings {
-  id: number;
+  user_id: string;
   systemPrompt: string;
   created_at: string;
   updated_at: string;
@@ -272,15 +272,16 @@ export async function getHistory(connectionId: number, userId: string): Promise<
   }
 }
 
-export async function getSettings(): Promise<Settings> {
+export async function getSettings(userId: string): Promise<Settings> {
   const db = await getDb();
   if (databaseConfig.type === 'mysql') {
     const [rows] = await (db as mysql.Pool).execute(
-      'SELECT * FROM settings WHERE id = 1'
+      'SELECT * FROM settings WHERE user_id = ? LIMIT 1',
+      [userId]
     );
     if (!rows || (rows as any[]).length === 0) {
       return {
-        id: 1,
+        user_id: userId,
         systemPrompt: '',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -289,11 +290,12 @@ export async function getSettings(): Promise<Settings> {
     return (rows as any[])[0] as Settings;
   } else {
     const row = await (db as SQLiteDatabase).get(
-      'SELECT * FROM settings WHERE id = 1'
+      'SELECT * FROM settings WHERE user_id = ? LIMIT 1',
+      [userId]
     );
     if (!row) {
       return {
-        id: 1,
+        user_id: userId,
         systemPrompt: '',
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
@@ -303,21 +305,20 @@ export async function getSettings(): Promise<Settings> {
   }
 }
 
-export async function saveSettings(systemPrompt: string): Promise<void> {
+export async function saveSettings(userId: string, systemPrompt: string): Promise<void> {
   const db = await getDb();
-  const now = databaseConfig.type === 'mysql' 
-    ? new Date().toISOString().slice(0, 19).replace('T', ' ')  // MySQL format: 'YYYY-MM-DD HH:MM:SS'
-    : new Date().toISOString();  // SQLite format: ISO string
-
+  const now = databaseConfig.type === 'mysql'
+    ? new Date().toISOString().slice(0, 19).replace('T', ' ')
+    : new Date().toISOString();
   if (databaseConfig.type === 'mysql') {
     await (db as mysql.Pool).execute(
-      'INSERT INTO settings (id, systemPrompt, created_at, updated_at) VALUES (1, ?, ?, ?) ON DUPLICATE KEY UPDATE systemPrompt = ?, updated_at = ?',
-      [systemPrompt, now, now, systemPrompt, now]
+      'INSERT INTO settings (user_id, systemPrompt, created_at, updated_at) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE systemPrompt = ?, updated_at = ?',
+      [userId, systemPrompt, now, now, systemPrompt, now]
     );
   } else {
     await (db as SQLiteDatabase).run(
-      'INSERT OR REPLACE INTO settings (id, systemPrompt, created_at, updated_at) VALUES (1, ?, ?, ?)',
-      [systemPrompt, now, now]
+      'INSERT OR REPLACE INTO settings (user_id, systemPrompt, created_at, updated_at) VALUES (?, ?, ?, ?)',
+      [userId, systemPrompt, now, now]
     );
   }
 }
