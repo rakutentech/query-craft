@@ -50,6 +50,7 @@ interface DatabaseConnection {
 interface Settings {
   aiSettings: {
     id: number;
+    userId?: string;
     systemPrompt: string;
   };
   databaseConnections: DatabaseConnection[];
@@ -205,8 +206,9 @@ export default function SettingsPage() {
       }
       let data = await response.json();
       if (data && data.databaseConnections.length > 0) {
+        data.settings.systemPrompt =  data.settings.systemPrompt? data.settings.systemPrompt : DEFAULT_SYSTEM_PROMPT;
         setSettings({
-          aiSettings: data.settings || { id: 1, systemPrompt: DEFAULT_SYSTEM_PROMPT },
+          aiSettings: data.settings,
           databaseConnections: data.databaseConnections
         });
       } else {
