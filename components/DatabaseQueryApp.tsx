@@ -1095,7 +1095,7 @@ export default function DatabaseQueryApp() {
                     </div>
                   )}
                   
-                  <ScrollArea className="max-h-full flex-grow">
+                  <ScrollArea className="max-h-full flex-grow pt-1">
                     <ul className="space-y-1">
                       {filteredConnections.map((connection) => (
                         <li key={connection.id}>
