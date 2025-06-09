@@ -496,6 +496,7 @@ export default function DatabaseQueryApp() {
                 });
                 if (!showResultPanel) {
                   setShowResultPanel(true);
+                  setShowLeftPanel(false);
                 }
               }
             }
@@ -520,6 +521,9 @@ export default function DatabaseQueryApp() {
             result: [...rows],
             hasError: false
           });
+          // Make sure we show the result panel and always hide the left panel
+          setShowResultPanel(true);
+          setShowLeftPanel(false);
         }
       } else {
         // fallback for non-streaming
@@ -542,6 +546,7 @@ export default function DatabaseQueryApp() {
           hasError: false
         });
         setShowResultPanel(true);
+        setShowLeftPanel(false); // Always hide left panel when showing results
       }
     } catch (error) {
       console.error("Error running SQL:", error);
@@ -559,6 +564,7 @@ export default function DatabaseQueryApp() {
         hasError: true
       });
       setShowResultPanel(true);
+      setShowLeftPanel(false); // Always hide left panel on error results
     } finally {
       setIsStreaming(false);
       setStopStreaming(false);
@@ -1061,11 +1067,8 @@ export default function DatabaseQueryApp() {
   // Function to close the result panel
   const closeResultPanel = () => {
     setShowResultPanel(false);
+    setShowLeftPanel(true);
     setActiveQueryResult(null);
-    // Restore left panel on larger screens if it was hidden
-    if (!showLeftPanel) {
-      setShowLeftPanel(true);
-    }
   };
 
   // Modify the viewResultInPanel function to handle left panel visibility
@@ -1075,7 +1078,7 @@ export default function DatabaseQueryApp() {
       hasError
     });
     setShowResultPanel(true);
-    // hide left panel when result panel is shown
+    // Always hide left panel when result panel is shown
     setShowLeftPanel(false);
   };
 
@@ -1090,13 +1093,13 @@ export default function DatabaseQueryApp() {
         isMedium
       });
       
-      // On large screens (xl and above), always show left panel
-      if (isLarge) {
-        setShowLeftPanel(true);
-      } 
-      // On medium screens, hide left panel when result panel is shown
-      else if (isMedium && showResultPanel) {
+      // When result panel is shown, always hide left panel regardless of screen size
+      if (showResultPanel) {
         setShowLeftPanel(false);
+      }
+      // On large screens (xl and above), show left panel when result panel is not shown
+      else if (isLarge) {
+        setShowLeftPanel(true);
       }
     };
 
@@ -1107,9 +1110,9 @@ export default function DatabaseQueryApp() {
     return () => {
       window.removeEventListener('resize', handleResize);
     };
-  }, [showResultPanel]);
+  }, [showResultPanel]); // Re-run when showResultPanel changes
 
-  // Function to handle resizing between chat and SQL result panels
+  // Function to handle resizing between chat and SQL panels
   const handlePanelResize = (newPosition: number) => {
     setPanelSplit(newPosition);
     // Save preference to localStorage for persistence
@@ -1139,7 +1142,7 @@ export default function DatabaseQueryApp() {
   return (
     <Box className="min-h-screen">
       <div className="container mx-auto py-2 px-2">
-        <div className="flex justify-between items-center border-b border-gray-200 dark:border-gray-700 pb-2">
+        <div className="flex justify-between items-center pb-2">
           <div className="flex items-center">
             <Button 
               variant="ghost" 
@@ -1198,26 +1201,28 @@ export default function DatabaseQueryApp() {
 
         <div className="flex space-x-0 lg:space-x-4 relative">
           {/* Left panel (databases and history) - hidden when SQL result panel is */}
-          {!showLeftPanel && (
+          {showLeftPanel && (
             <div className="w-full lg:w-1/5 lg:min-w-[220px] xl:min-w-[250px] absolute lg:relative z-10 bg-white dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent">
-              <Card className="mb-2 h-[calc(100vh-350px)] flex flex-col">
-                <CardHeader className="border-b border-gray-200 dark:border-gray-700 pb-2">
+              <Card className="mb-2 h-[calc(100vh-350px)] flex flex-col bg-white dark:bg-gray-800 shadow-lg">
+                <CardHeader className="border-b border-gray-200 dark:border-gray-700 py-2">
                   <div className="flex justify-between items-center">
-                    <h2 className="text-xl font-semibold">
+                    <h2 className="text-lg font-semibold">
                       Databases
                     </h2>
                   </div>
                 </CardHeader>
-                <CardContent className="flex-1 overflow-hidden">
+                <CardContent className="p-0">
                   <div className="flex flex-col h-full">
                     {uniqueTags.length > 0 && (
-                      <div className="mb-2 mt-1">
+                      <div className="mb-2 mt-2 px-2">
                         <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Filter by Tags</div>
                         <div className="flex flex-wrap gap-1 overflow-y-auto">
                           <Button
                             variant={!selectedTag ? "default" : "outline"}
                             size="sm"
-                            className="px-2 py-1 text-xs"
+                            className={`px-2 py-1 text-xs ${
+                              !selectedTag ? "bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-700 dark:hover:bg-blue-800" : ""
+                            }`}
                             onClick={() => handleTagSelect(null)}
                           >
                             All
@@ -1227,7 +1232,9 @@ export default function DatabaseQueryApp() {
                               key={tag}
                               variant={selectedTag === tag ? "default" : "outline"}
                               size="sm"
-                              className="px-2 py-1 text-xs"
+                              className={`px-2 py-1 text-xs ${
+                                selectedTag === tag ? "bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-700 dark:hover:bg-blue-800" : ""
+                              }`}
                               onClick={() => handleTagSelect(tag)}
                             >
                               {tag}
@@ -1237,22 +1244,26 @@ export default function DatabaseQueryApp() {
                       </div>
                     )}
                     
-                    <ScrollArea className="max-h-full flex-grow pt-1">
-                      <ul className="space-y-1">
+                    <ScrollArea className="flex-grow overflow-y-auto">
+                      <ul className="divide-y divide-gray-200 dark:divide-gray-700">
                         {filteredConnections.map((connection) => (
-                          <li key={connection.id}>
-                            <Button
-                              variant={
-                                selectedConnectionId === connection.id
-                                  ? "default"
-                                  : "outline"
-                              }
-                              className="w-full justify-start px-2 py-1 text-xs h-8"
-                              onClick={() => handleConnectionSelect(connection.id)}
-                            >
-                              <Database className="mr-2 h-4 w-4" />
-                              {connection.projectName}
-                            </Button>
+                          <li 
+                            key={connection.id}
+                            className={`px-2 py-1 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/50 transition-colors duration-150 flex items-center ${
+                              selectedConnectionId === connection.id 
+                              ? "bg-blue-100 dark:bg-blue-900/70 text-blue-900 dark:text-blue-100" 
+                              : "text-gray-800 dark:text-gray-200"
+                            }`}
+                            onClick={() => handleConnectionSelect(connection.id)}
+                          >
+                            <div className="flex items-center w-full">
+                              <Database className={`h-4 w-4 mr-2 ${
+                                selectedConnectionId === connection.id 
+                                ? "text-blue-600 dark:text-blue-400" 
+                                : "text-gray-600 dark:text-gray-400"
+                              }`} />
+                              <span className="text-xs font-medium truncate">{connection.projectName}</span>
+                            </div>
                           </li>
                         ))}
                       </ul>
@@ -1279,13 +1290,13 @@ export default function DatabaseQueryApp() {
                 </CardHeader>
                 <CardContent className="p-0">
                   <ScrollArea className="h-[140px] overflow-y-auto">
-                    <ul className="divide-y divide-gray-200">
+                    <ul className="divide-y divide-gray-200 dark:divide-gray-700">
                       {selectedConnectionId &&
                         currentConversation?.map((conversation) => (
                             <li
                               key={conversation.id}
-                              className={`px-2 py-1 cursor-pointer hover:bg-blue-50 transition-colors duration-150 text-xs flex items-center min-h-[32px] ${
-                                conversation.id === conversationId ? "bg-blue-100" : ""
+                              className={`px-2 py-1 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/50 transition-colors duration-150 text-xs flex items-center min-h-[32px] ${
+                                conversation.id === conversationId ? "bg-blue-100 dark:bg-blue-900/70 text-blue-900 dark:text-blue-100" : "text-gray-800 dark:text-gray-200"
                               }`}
                             >
                               <div className="flex items-center justify-between w-full">
@@ -1302,7 +1313,7 @@ export default function DatabaseQueryApp() {
                                           setEditingTitle("");
                                         }
                                       }}
-                                      className="h-6 text-xs px-1"
+                                      className="h-6 text-xs px-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
                                       autoFocus
                                     />
                                   </div>
@@ -1311,7 +1322,7 @@ export default function DatabaseQueryApp() {
                                     className="flex-1 truncate"
                                     onClick={() => handleConversationClick(conversation)}
                                   >
-                                    <p className="font-medium text-gray-800 truncate text-xs">
+                                    <p className="font-medium truncate text-xs">
                                       {conversation.title}
                                     </p>
                                   </div>
@@ -1323,7 +1334,7 @@ export default function DatabaseQueryApp() {
                                         variant="ghost"
                                         size="icon"
                                         onClick={() => handleTitleSave(conversation.id)}
-                                        className="h-6 w-6"
+                                        className="h-6 w-6 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30"
                                       >
                                         <Check className="h-3 w-3" />
                                       </Button>
@@ -1334,7 +1345,7 @@ export default function DatabaseQueryApp() {
                                           setEditingTitleId(null);
                                           setEditingTitle("");
                                         }}
-                                        className="h-6 w-6"
+                                        className="h-6 w-6 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
                                       >
                                         <RotateCcw className="h-3 w-3" />
                                       </Button>
@@ -1347,7 +1358,7 @@ export default function DatabaseQueryApp() {
                                         e.stopPropagation();
                                         handleTitleEdit(conversation);
                                       }}
-                                      className="h-6 w-6 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                                      className="h-6 w-6 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30"
                                     >
                                       <Pencil className="h-3 w-3" />
                                     </Button>

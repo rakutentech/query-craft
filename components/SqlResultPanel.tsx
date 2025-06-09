@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import {
   flexRender,
@@ -42,6 +42,58 @@ export default function SqlResultPanel({ results, onClose, hasError = false }: S
   const [sorting, setSorting] = useState<SortingState>([]);
   const [pageSize, setPageSize] = useState(10);
 
+  // Always create the column helper regardless of results
+  const columnHelper = createColumnHelper<any>();
+
+  // Compute columns and data
+  const { columns, data } = useMemo(() => {
+    // Default empty state
+    const emptyColumns: any[] = [];
+    const emptyData: any[] = [];
+
+    // Only process if we have array results with data
+    if (results && Array.isArray(results) && results.length > 0) {
+      const cols = Object.keys(results[0]).map(key => 
+        columnHelper.accessor(key, {
+          header: () => <span className="font-medium">{key}</span>,
+          cell: info => {
+            const value = info.getValue();
+            // For long text, use text ellipsis but allow hovering to see full content
+            if (typeof value === 'string' && value.length > 50) {
+              return (
+                <div className="max-w-xs truncate" title={value}>
+                  {value}
+                </div>
+              );
+            }
+            return <span>{String(value ?? '')}</span>;
+          },
+        })
+      );
+      return { columns: cols, data: results };
+    }
+    
+    return { columns: emptyColumns, data: emptyData };
+  }, [results, columnHelper]);
+
+  // Always create the table instance with consistent data structure
+  const table = useReactTable({
+    data,
+    columns,
+    state: {
+      sorting,
+    },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    initialState: {
+      pagination: {
+        pageSize,
+      },
+    },
+  });
+
   const exportToCsv = () => {
     if (!results || !Array.isArray(results) || results.length === 0) return;
     
@@ -70,31 +122,33 @@ export default function SqlResultPanel({ results, onClose, hasError = false }: S
     document.body.removeChild(link);
   };
 
-  if (!results) {
-    return (
-      <Card className="h-full flex flex-col">
-        <CardHeader className="py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-          <h2 className="text-lg font-semibold">Query Results</h2>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        </CardHeader>
+  return (
+    <Card className="h-full flex flex-col">
+      <CardHeader className="py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
+        <div className="flex justify-between w-full items-center">
+          <h2 className="text-lg font-semibold">
+            {Array.isArray(results) ? `Query Results (${results.length} rows)` : 'Query Results'}
+          </h2>
+          <div className="flex items-center gap-2">
+            {Array.isArray(results) && results.length > 0 && (
+              <Button variant="outline" size="sm" onClick={exportToCsv}>
+                <Download className="h-4 w-4 mr-1" />
+                Export CSV
+              </Button>
+            )}
+            <Button variant="ghost" size="icon" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+
+      {/* Conditional content based on results */}
+      {!results ? (
         <CardContent className="flex-1 flex items-center justify-center p-6">
           <p className="text-gray-500 dark:text-gray-400">No results to display</p>
         </CardContent>
-      </Card>
-    );
-  }
-
-  if (!Array.isArray(results)) {
-    return (
-      <Card className="h-full flex flex-col">
-        <CardHeader className="py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-          <h2 className="text-lg font-semibold">Query Results</h2>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        </CardHeader>
+      ) : !Array.isArray(results) ? (
         <CardContent className="flex-1 p-6">
           {hasError ? (
             <Alert variant="destructive">
@@ -110,19 +164,7 @@ export default function SqlResultPanel({ results, onClose, hasError = false }: S
             </Alert>
           )}
         </CardContent>
-      </Card>
-    );
-  }
-
-  if (results.length === 0) {
-    return (
-      <Card className="h-full flex flex-col">
-        <CardHeader className="py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-          <h2 className="text-lg font-semibold">Query Results</h2>
-          <Button variant="ghost" size="icon" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
-        </CardHeader>
+      ) : results.length === 0 ? (
         <CardContent className="flex-1 p-6">
           <Alert>
             <AlertTitle>No Results</AlertTitle>
@@ -131,175 +173,120 @@ export default function SqlResultPanel({ results, onClose, hasError = false }: S
             </AlertDescription>
           </Alert>
         </CardContent>
-      </Card>
-    );
-  }
-
-  // Dynamically create columns based on first result object
-  const columnHelper = createColumnHelper<any>();
-  const columns = Object.keys(results[0]).map(key => 
-    columnHelper.accessor(key, {
-      header: () => <span className="font-medium">{key}</span>,
-      cell: info => {
-        const value = info.getValue();
-        // For long text, use text ellipsis but allow hovering to see full content
-        if (typeof value === 'string' && value.length > 50) {
-          return (
-            <div className="max-w-xs truncate" title={value}>
-              {value}
-            </div>
-          );
-        }
-        return <span>{String(value ?? '')}</span>;
-      },
-    })
-  );
-
-  const table = useReactTable({
-    data: results,
-    columns,
-    state: {
-      sorting,
-    },
-    onSortingChange: setSorting,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    initialState: {
-      pagination: {
-        pageSize,
-      },
-    },
-  });
-
-  return (
-    <Card className="h-full flex flex-col">
-      <CardHeader className="py-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
-        <div className="flex justify-between w-full items-center">
-          <h2 className="text-lg font-semibold">Query Results ({results.length} rows)</h2>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={exportToCsv}>
-              <Download className="h-4 w-4 mr-1" />
-              Export CSV
-            </Button>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent className="flex-1 p-0 overflow-hidden">
-        <div className="flex flex-col h-full">
-          <ScrollArea className="flex-1">
-            <div className="overflow-auto">
-              <div className="min-w-full inline-block align-middle">
-                <div className="overflow-x-auto max-w-full">
-                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 table-fixed" style={{ width: columns.length * 200 + 'px', maxWidth: 'none' }}>
-                    <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
-                      {table.getHeaderGroups().map(headerGroup => (
-                        <tr key={headerGroup.id}>
-                          {headerGroup.headers.map(header => (
-                            <th 
-                              key={header.id} 
-                              className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700 whitespace-nowrap"
-                              onClick={header.column.getToggleSortingHandler()}
-                              style={{ cursor: 'pointer', minWidth: '150px', maxWidth: '300px' }}
-                            >
-                              <div className="flex items-center">
+      ) : (
+        <CardContent className="flex-1 p-0 overflow-hidden">
+          <div className="flex flex-col h-full">
+            <ScrollArea className="flex-1">
+              <div className="overflow-auto">
+                <div className="min-w-full inline-block align-middle">
+                  <div className="overflow-x-auto max-w-full">
+                    <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 table-fixed" style={{ width: columns.length * 200 + 'px', maxWidth: 'none' }}>
+                      <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
+                        {table.getHeaderGroups().map(headerGroup => (
+                          <tr key={headerGroup.id}>
+                            {headerGroup.headers.map(header => (
+                              <th 
+                                key={header.id} 
+                                className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700 whitespace-nowrap"
+                                onClick={header.column.getToggleSortingHandler()}
+                                style={{ cursor: 'pointer', minWidth: '150px', maxWidth: '300px' }}
+                              >
+                                <div className="flex items-center">
+                                  {flexRender(
+                                    header.column.columnDef.header,
+                                    header.getContext()
+                                  )}
+                                  <span className="ml-1">
+                                    {{
+                                      asc: <ChevronUp className="h-4 w-4" />,
+                                      desc: <ChevronDown className="h-4 w-4" />,
+                                    }[header.column.getIsSorted() as string] ?? null}
+                                  </span>
+                                </div>
+                              </th>
+                            ))}
+                          </tr>
+                        ))}
+                      </thead>
+                      <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                        {table.getRowModel().rows.map(row => (
+                          <tr 
+                            key={row.id}
+                            className={`${
+                              row.index % 2 === 0 
+                                ? 'bg-white dark:bg-gray-900' 
+                                : 'bg-gray-50 dark:bg-gray-800'
+                            } hover:bg-gray-100 dark:hover:bg-gray-700`}
+                          >
+                            {row.getVisibleCells().map(cell => (
+                              <td
+                                key={cell.id}
+                                className="px-4 py-2 text-sm text-gray-900 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700 whitespace-nowrap overflow-hidden text-ellipsis"
+                                style={{ maxWidth: '300px' }}
+                              >
                                 {flexRender(
-                                  header.column.columnDef.header,
-                                  header.getContext()
+                                  cell.column.columnDef.cell,
+                                  cell.getContext()
                                 )}
-                                <span className="ml-1">
-                                  {{
-                                    asc: <ChevronUp className="h-4 w-4" />,
-                                    desc: <ChevronDown className="h-4 w-4" />,
-                                  }[header.column.getIsSorted() as string] ?? null}
-                                </span>
-                              </div>
-                            </th>
-                          ))}
-                        </tr>
-                      ))}
-                    </thead>
-                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                      {table.getRowModel().rows.map(row => (
-                        <tr 
-                          key={row.id}
-                          className={`${
-                            row.index % 2 === 0 
-                              ? 'bg-white dark:bg-gray-900' 
-                              : 'bg-gray-50 dark:bg-gray-800'
-                          } hover:bg-gray-100 dark:hover:bg-gray-700`}
-                        >
-                          {row.getVisibleCells().map(cell => (
-                            <td
-                              key={cell.id}
-                              className="px-4 py-2 text-sm text-gray-900 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700 whitespace-nowrap overflow-hidden text-ellipsis"
-                              style={{ maxWidth: '300px' }}
-                            >
-                              {flexRender(
-                                cell.column.columnDef.cell,
-                                cell.getContext()
-                              )}
-                            </td>
-                          ))}
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               </div>
-            </div>
-          </ScrollArea>
+            </ScrollArea>
 
-          <div className="border-t border-gray-200 dark:border-gray-700 p-2 flex items-center justify-between bg-gray-50 dark:bg-gray-800">
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500 dark:text-gray-400">
-                Page {table.getState().pagination.pageIndex + 1} of{' '}
-                {table.getPageCount()}
-              </span>
-              <Select
-                value={pageSize.toString()}
-                onValueChange={(value) => {
-                  setPageSize(Number(value));
-                  table.setPageSize(Number(value));
-                }}
-              >
-                <SelectTrigger className="h-8 w-[80px]">
-                  <SelectValue placeholder="10" />
-                </SelectTrigger>
-                <SelectContent>
-                  {[10, 20, 30, 40, 50].map(size => (
-                    <SelectItem key={size} value={size.toString()}>
-                      {size}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <span className="text-sm text-gray-500 dark:text-gray-400">rows per page</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => table.previousPage()}
-                disabled={!table.getCanPreviousPage()}
-              >
-                Previous
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => table.nextPage()}
-                disabled={!table.getCanNextPage()}
-              >
-                Next
-              </Button>
+            <div className="border-t border-gray-200 dark:border-gray-700 p-2 flex items-center justify-between bg-gray-50 dark:bg-gray-800">
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  Page {table.getState().pagination.pageIndex + 1} of{' '}
+                  {table.getPageCount()}
+                </span>
+                <Select
+                  value={pageSize.toString()}
+                  onValueChange={(value) => {
+                    setPageSize(Number(value));
+                    table.setPageSize(Number(value));
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-[80px]">
+                    <SelectValue placeholder="10" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {[10, 20, 30, 40, 50].map(size => (
+                      <SelectItem key={size} value={size.toString()}>
+                        {size}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <span className="text-sm text-gray-500 dark:text-gray-400">rows per page</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => table.previousPage()}
+                  disabled={!table.getCanPreviousPage()}
+                >
+                  Previous
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => table.nextPage()}
+                  disabled={!table.getCanNextPage()}
+                >
+                  Next
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      </CardContent>
+        </CardContent>
+      )}
     </Card>
   );
 } 
