@@ -39,7 +39,10 @@ import {
   Loader2,
   Share2,
   Ban,
-  ArrowDown
+  ArrowDown,
+  X,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { format, parseISO, addHours } from "date-fns";
 import ReactMarkdown from 'react-markdown';
@@ -53,6 +56,7 @@ import { useToast } from "@/components/ui/use-toast";
 import Image from "next/image";
 import {AI_PROVIDER_ERROR} from "@/constants/error";
 import { Box, Flex, Text } from "@radix-ui/themes";
+import SqlResultPanel from './SqlResultPanel';
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 const ENABLE_OAUTH = process.env.NEXT_PUBLIC_ENABLE_OAUTH;
@@ -138,6 +142,16 @@ export default function DatabaseQueryApp() {
   const prevMessagesRef = useRef<Message[]>([]);
   const [editingTitleId, setEditingTitleId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
+  const [activeQueryResult, setActiveQueryResult] = useState<{
+    result: QueryResult[] | QueryResponse | undefined;
+    hasError: boolean;
+  } | null>(null);
+  const [showResultPanel, setShowResultPanel] = useState(false);
+  const [showLeftPanel, setShowLeftPanel] = useState(true);
+  const [screenSize, setScreenSize] = useState({
+    isLarge: false,  // >= 1280px (xl breakpoint)
+    isMedium: false  // >= 768px (md breakpoint)
+  });
 
   useEffect(() => {
     checkSettings();
@@ -473,13 +487,20 @@ export default function DatabaseQueryApp() {
                             : msg
                     )
                 );
+                // Also update the active query result for the panel
+                setActiveQueryResult({
+                  result: [...rows],
+                  hasError: false
+                });
+                if (!showResultPanel) {
+                  setShowResultPanel(true);
+                }
               }
             }
           }
-          // break if done
-            if (done) {
-                break;
-            }
+          if (done) {
+            break;
+          }
         }
         // Handle any remaining buffered line
         if (buffer.trim()) {
@@ -492,6 +513,11 @@ export default function DatabaseQueryApp() {
                       : msg
               )
           );
+          // Update the panel result one last time
+          setActiveQueryResult({
+            result: [...rows],
+            hasError: false
+          });
         }
       } else {
         // fallback for non-streaming
@@ -509,6 +535,11 @@ export default function DatabaseQueryApp() {
                 msg.id === messageId ? { ...msg, result: data.result } : msg
             )
         );
+        setActiveQueryResult({
+          result: data.result,
+          hasError: false
+        });
+        setShowResultPanel(true);
       }
     } catch (error) {
       console.error("Error running SQL:", error);
@@ -521,6 +552,11 @@ export default function DatabaseQueryApp() {
             : msg
         )
       );
+      setActiveQueryResult({
+        result: [{ error: errorMessage }],
+        hasError: true
+      });
+      setShowResultPanel(true);
     } finally {
       setIsStreaming(false);
       setStopStreaming(false);
@@ -784,64 +820,75 @@ export default function DatabaseQueryApp() {
       if (!message.result) return null;
 
       return (
-          <div className="max-h-[300px] overflow-auto">
-            {Array.isArray(message.result) ? (
-                message.result.length === 0 ? (
-                    <Alert>
-                      <AlertTitle>No Results</AlertTitle>
-                      <AlertDescription>
-                        The query returned no results.
-                      </AlertDescription>
-                    </Alert>
-                ) : (
-                    <table className="w-full table-auto min-w-max">
-                      <thead>
-                      <tr className="bg-gray-50">
-                        {Object.keys(message.result[0]).map((key) => (
-                            <th
-                                key={key}
-                                className={`px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap ${key === 'error' ? errorClass : ""}`}
+        <div className="max-h-[300px] overflow-auto">
+          {Array.isArray(message.result) ? (
+            message.result.length === 0 ? (
+              <Alert>
+                <AlertTitle>No Results</AlertTitle>
+                <AlertDescription>
+                  The query returned no results.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <div>
+                <div className="flex justify-end mb-2">
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={() => viewResultInPanel(message.result!, message.error || false)}
+                  >
+                    View in Panel
+                  </Button>
+                </div>
+                <table className="w-full table-auto min-w-max">
+                  <thead>
+                  <tr className="bg-gray-50">
+                    {Object.keys(message.result[0]).map((key) => (
+                        <th
+                            key={key}
+                            className={`px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap ${key === 'error' ? errorClass : ""}`}
+                        >
+                          {key}
+                        </th>
+                    ))}
+                  </tr>
+                  </thead>
+                  <tbody>
+                  {message.result.map((row, index) => (
+                      <tr
+                          key={index}
+                          className={`${
+                              row.error ? errorClass : index % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800"
+                          }`}
+                      >
+                        {Object.values(row).map((value, idx) => (
+                            <td
+                                key={idx}
+                                className="px-4 py-2 whitespace-nowrap text-sm text-gray-900"
                             >
-                              {key}
-                            </th>
+                              {String(value)}
+                            </td>
                         ))}
                       </tr>
-                      </thead>
-                      <tbody>
-                      {message.result.map((row, index) => (
-                          <tr
-                              key={index}
-                              className={`${
-                                  row.error ? errorClass : index % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800"
-                              }`}
-                          >
-                            {Object.values(row).map((value, idx) => (
-                                <td
-                                    key={idx}
-                                    className="px-4 py-2 whitespace-nowrap text-sm text-gray-900"
-                                >
-                                  {String(value)}
-                                </td>
-                            ))}
-                          </tr>
-                      ))}
-                      </tbody>
-                    </table>
-                )
-            ) : "affectedRows" in message.result ? (
-                <Alert>
-                  <AlertTitle>Query Executed Successfully</AlertTitle>
-                  <AlertDescription>
-                    Affected rows: {message.result.affectedRows}
-                  </AlertDescription>
-                </Alert>
-            ) : (
-                <Alert variant="destructive">
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>{message.result.error}</AlertDescription>
-                </Alert>
-            )}
-          </div>
+                  ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          ) : "affectedRows" in message.result ? (
+            <Alert>
+              <AlertTitle>Query Executed Successfully</AlertTitle>
+              <AlertDescription>
+                Affected rows: {message.result.affectedRows}
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <Alert variant="destructive">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{message.result.error}</AlertDescription>
+            </Alert>
+          )}
+        </div>
       );
     }
 
@@ -995,6 +1042,62 @@ export default function DatabaseQueryApp() {
     }
   };
 
+  // Function to toggle the left panel visibility (for mobile/narrow screens)
+  const toggleLeftPanel = () => {
+    setShowLeftPanel(prev => !prev);
+  };
+
+  // Function to close the result panel
+  const closeResultPanel = () => {
+    setShowResultPanel(false);
+    setActiveQueryResult(null);
+    // Restore left panel on larger screens if it was hidden
+    if (!showLeftPanel) {
+      setShowLeftPanel(true);
+    }
+  };
+
+  // Modify the viewResultInPanel function to handle left panel visibility
+  const viewResultInPanel = (result: QueryResult[] | QueryResponse, hasError: boolean) => {
+    setActiveQueryResult({
+      result,
+      hasError
+    });
+    setShowResultPanel(true);
+    // hide left panel when result panel is shown
+    setShowLeftPanel(false);
+  };
+
+  // Add useEffect to handle screen size changes and SQL panel interaction
+  useEffect(() => {
+    const handleResize = () => {
+      const isLarge = window.innerWidth >= 1280;
+      const isMedium = window.innerWidth >= 768 && window.innerWidth < 1280;
+      
+      setScreenSize({
+        isLarge,
+        isMedium
+      });
+      
+      // On large screens (xl and above), always show left panel
+      if (isLarge) {
+        setShowLeftPanel(true);
+      } 
+      // On medium screens, hide left panel when result panel is shown
+      else if (isMedium && showResultPanel) {
+        setShowLeftPanel(false);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    // Run once on mount and when result panel visibility changes
+    handleResize();
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [showResultPanel]);
+
   if (status === "loading") {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -1011,9 +1114,20 @@ export default function DatabaseQueryApp() {
     <Box className="min-h-screen">
       <div className="container mx-auto py-2 px-2">
         <div className="flex justify-between items-center border-b border-gray-200 dark:border-gray-700 pb-2">
-        <h1 className="text-2xl items-center font-bold p-2">
-          Chat
-        </h1>
+          <div className="flex items-center">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={toggleLeftPanel}
+              className="mr-2 "
+              aria-label={showLeftPanel ? "Hide sidebar" : "Show sidebar"}
+            >
+              {showLeftPanel ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </Button>
+            <h1 className="text-2xl items-center font-bold p-2">
+              Chat
+            </h1>
+          </div>
           <div className="flex items-center space-x-4">
             {showAuth && (
               session ? (
@@ -1056,172 +1170,183 @@ export default function DatabaseQueryApp() {
           </div>
         </div>
 
-        <div className="flex space-x-6">
-          <div className="w-1/4 min-w-[250px]">
-            <Card className="mb-2 h-[calc(100vh-350px)] flex flex-col">
-              <CardHeader className="border-b border-gray-200 dark:border-gray-700 pb-2">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-semibold">
-                    Databases
-                  </h2>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1 overflow-hidden">
-                <div className="flex flex-col h-full">
-                  {uniqueTags.length > 0 && (
-                    <div className="mb-2 mt-1">
-                      <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Filter by Tags</div>
-                      <div className="flex flex-wrap gap-1 overflow-y-auto">
-                        <Button
-                          variant={!selectedTag ? "default" : "outline"}
-                          size="sm"
-                          className="px-2 py-1 text-xs"
-                          onClick={() => handleTagSelect(null)}
-                        >
-                          All
-                        </Button>
-                        {uniqueTags.map(tag => (
+        <div className="flex space-x-0 lg:space-x-4 relative">
+          {/* Left panel (databases and history) - hidden when SQL result panel is */}
+          {!showLeftPanel && (
+            <div className="w-full lg:w-1/5 lg:min-w-[220px] xl:min-w-[250px] absolute lg:relative z-10 bg-white dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent">
+              <Card className="mb-2 h-[calc(100vh-350px)] flex flex-col">
+                <CardHeader className="border-b border-gray-200 dark:border-gray-700 pb-2">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-xl font-semibold">
+                      Databases
+                    </h2>
+                  </div>
+                </CardHeader>
+                <CardContent className="flex-1 overflow-hidden">
+                  <div className="flex flex-col h-full">
+                    {uniqueTags.length > 0 && (
+                      <div className="mb-2 mt-1">
+                        <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Filter by Tags</div>
+                        <div className="flex flex-wrap gap-1 overflow-y-auto">
                           <Button
-                            key={tag}
-                            variant={selectedTag === tag ? "default" : "outline"}
+                            variant={!selectedTag ? "default" : "outline"}
                             size="sm"
                             className="px-2 py-1 text-xs"
-                            onClick={() => handleTagSelect(tag)}
+                            onClick={() => handleTagSelect(null)}
                           >
-                            {tag}
+                            All
                           </Button>
-                        ))}
+                          {uniqueTags.map(tag => (
+                            <Button
+                              key={tag}
+                              variant={selectedTag === tag ? "default" : "outline"}
+                              size="sm"
+                              className="px-2 py-1 text-xs"
+                              onClick={() => handleTagSelect(tag)}
+                            >
+                              {tag}
+                            </Button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  
-                  <ScrollArea className="max-h-full flex-grow pt-1">
-                    <ul className="space-y-1">
-                      {filteredConnections.map((connection) => (
-                        <li key={connection.id}>
-                          <Button
-                            variant={
-                              selectedConnectionId === connection.id
-                                ? "default"
-                                : "outline"
-                            }
-                            className="w-full justify-start px-2 py-1 text-xs h-8"
-                            onClick={() => handleConnectionSelect(connection.id)}
-                          >
-                            <Database className="mr-2 h-4 w-4" />
-                            {connection.projectName}
-                          </Button>
-                        </li>
-                      ))}
+                    )}
+                    
+                    <ScrollArea className="max-h-full flex-grow pt-1">
+                      <ul className="space-y-1">
+                        {filteredConnections.map((connection) => (
+                          <li key={connection.id}>
+                            <Button
+                              variant={
+                                selectedConnectionId === connection.id
+                                  ? "default"
+                                  : "outline"
+                              }
+                              className="w-full justify-start px-2 py-1 text-xs h-8"
+                              onClick={() => handleConnectionSelect(connection.id)}
+                            >
+                              <Database className="mr-2 h-4 w-4" />
+                              {connection.projectName}
+                            </Button>
+                          </li>
+                        ))}
+                      </ul>
+                    </ScrollArea>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="h-[245px] bg-white dark:bg-gray-800 shadow-lg">
+                <CardHeader className="border-b border-gray-200 dark:border-gray-700 py-2">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-lg font-semibold">
+                      History
+                    </h2>
+                    <Button
+                      onClick={handleNewConversation}
+                      variant="outline"
+                      size="sm"
+                      className="text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 px-2 py-1 text-xs"
+                    >
+                      New Chat
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <ScrollArea className="h-[140px] overflow-y-auto">
+                    <ul className="divide-y divide-gray-200">
+                      {selectedConnectionId &&
+                        currentConversation?.map((conversation) => (
+                            <li
+                              key={conversation.id}
+                              className={`px-2 py-1 cursor-pointer hover:bg-blue-50 transition-colors duration-150 text-xs flex items-center min-h-[32px] ${
+                                conversation.id === conversationId ? "bg-blue-100" : ""
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                {editingTitleId === conversation.id ? (
+                                  <div className="flex-1 mr-1">
+                                    <Input
+                                      value={editingTitle}
+                                      onChange={(e) => setEditingTitle(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          handleTitleSave(conversation.id);
+                                        } else if (e.key === 'Escape') {
+                                          setEditingTitleId(null);
+                                          setEditingTitle("");
+                                        }
+                                      }}
+                                      className="h-6 text-xs px-1"
+                                      autoFocus
+                                    />
+                                  </div>
+                                ) : (
+                                  <div
+                                    className="flex-1 truncate"
+                                    onClick={() => handleConversationClick(conversation)}
+                                  >
+                                    <p className="font-medium text-gray-800 truncate text-xs">
+                                      {conversation.title}
+                                    </p>
+                                  </div>
+                                )}
+                                <div className="flex items-center space-x-1">
+                                  {editingTitleId === conversation.id ? (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handleTitleSave(conversation.id)}
+                                        className="h-6 w-6"
+                                      >
+                                        <Check className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => {
+                                          setEditingTitleId(null);
+                                          setEditingTitle("");
+                                        }}
+                                        className="h-6 w-6"
+                                      >
+                                        <RotateCcw className="h-3 w-3" />
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleTitleEdit(conversation);
+                                      }}
+                                      className="h-6 w-6 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                                    >
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            </li>
+                          )
+                        )}
                     </ul>
                   </ScrollArea>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
-            <Card className="h-[245px] bg-white dark:bg-gray-800 shadow-lg">
-              <CardHeader className="border-b border-gray-200 dark:border-gray-700 py-2">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-lg font-semibold">
-                    History
-                  </h2>
-                  <Button
-                    onClick={handleNewConversation}
-                    variant="outline"
-                    size="sm"
-                    className="text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 px-2 py-1 text-xs"
-                  >
-                    New Chat
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <ScrollArea className="h-[140px] overflow-y-auto">
-                  <ul className="divide-y divide-gray-200">
-                    {selectedConnectionId &&
-                      currentConversation?.map((conversation) => (
-                          <li
-                            key={conversation.id}
-                            className={`px-2 py-1 cursor-pointer hover:bg-blue-50 transition-colors duration-150 text-xs flex items-center min-h-[32px] ${
-                              conversation.id === conversationId ? "bg-blue-100" : ""
-                            }`}
-                          >
-                            <div className="flex items-center justify-between w-full">
-                              {editingTitleId === conversation.id ? (
-                                <div className="flex-1 mr-1">
-                                  <Input
-                                    value={editingTitle}
-                                    onChange={(e) => setEditingTitle(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        handleTitleSave(conversation.id);
-                                      } else if (e.key === 'Escape') {
-                                        setEditingTitleId(null);
-                                        setEditingTitle("");
-                                      }
-                                    }}
-                                    className="h-6 text-xs px-1"
-                                    autoFocus
-                                  />
-                                </div>
-                              ) : (
-                                <div
-                                  className="flex-1 truncate"
-                                  onClick={() => handleConversationClick(conversation)}
-                                >
-                                  <p className="font-medium text-gray-800 truncate text-xs">
-                                    {conversation.title}
-                                  </p>
-                                </div>
-                              )}
-                              <div className="flex items-center space-x-1">
-                                {editingTitleId === conversation.id ? (
-                                  <>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => handleTitleSave(conversation.id)}
-                                      className="h-6 w-6"
-                                    >
-                                      <Check className="h-3 w-3" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => {
-                                        setEditingTitleId(null);
-                                        setEditingTitle("");
-                                      }}
-                                      className="h-6 w-6"
-                                    >
-                                      <RotateCcw className="h-3 w-3" />
-                                    </Button>
-                                  </>
-                                ) : (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleTitleEdit(conversation);
-                                    }}
-                                    className="h-6 w-6 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
-                                  >
-                                    <Pencil className="h-3 w-3" />
-                                  </Button>
-                                )}
-                              </div>
-                            </div>
-                          </li>
-                        )
-                      )}
-                  </ul>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="flex-1 flex flex-col h-[calc(100vh-120px)]">
+          {/* Middle panel (chat) - adjusts width based on what else is visible */}
+          <div className={`
+            flex-1 flex flex-col h-[calc(100vh-120px)]
+            ${showLeftPanel && !showResultPanel ? 'lg:ml-[220px] xl:ml-0 lg:w-3/4' : ''} 
+            ${showResultPanel ? 
+              'hidden lg:flex lg:w-1/2 xl:w-2/5' 
+              : 'w-full'
+            }
+          `}>
             <Card className="flex-1 flex flex-col bg-white dark:bg-gray-800 shadow-lg">
               <CardContent className="flex-1 overflow-hidden p-4 relative">
                 <ScrollArea className="h-full pr-4">
@@ -1295,6 +1420,17 @@ export default function DatabaseQueryApp() {
               </CardContent>
             </Card>
           </div>
+
+          {/* Right panel (SQL results) - takes appropriate width */}
+          {showResultPanel && (
+            <div className="w-full lg:w-1/2 xl:w-3/5 flex-1 h-[calc(100vh-120px)]">
+              <SqlResultPanel 
+                results={activeQueryResult?.result} 
+                hasError={activeQueryResult?.hasError || false}
+                onClose={closeResultPanel} 
+              />
+            </div>
+          )}
         </div>
       </div>
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
