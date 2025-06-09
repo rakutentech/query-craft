@@ -678,7 +678,7 @@ export default function DatabaseQueryApp() {
               href={shareUrl} 
               target="_blank" 
               rel="noopener noreferrer"
-              className="text-sm text-blue-500 hover:underline break-all"
+              className="text-sm text-primary hover:underline break-all"
             >
               {shareUrl}
             </a>
@@ -709,7 +709,7 @@ export default function DatabaseQueryApp() {
           const currentSql = message.editedSql || sql;
 
           return (
-            <div key={index} className="my-3 bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100 p-3 rounded-lg">
+            <div key={index} className="my-3 bg-accent/10 dark:bg-accent/20 text-accent-foreground dark:text-accent-foreground p-3 rounded-lg">
               <div className="flex justify-between items-center mb-2">
                 <p className="font-semibold">Generated SQL:</p>
                 <div className="flex gap-2">
@@ -768,7 +768,8 @@ export default function DatabaseQueryApp() {
                 <Button
                   onClick={() => explainSQL(currentSql, messageId)}
                   size="sm"
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  variant="default"
+                  className="bg-primary hover:bg-primary/80 text-primary-foreground"
                   disabled={loadingOperation.type === 'explain' && loadingOperation.messageId === messageId}
                 >
                   {loadingOperation.type === 'explain' && loadingOperation.messageId === messageId ? (
@@ -781,7 +782,8 @@ export default function DatabaseQueryApp() {
                 <Button
                   onClick={() => runSQL(currentSql, messageId)}
                   size="sm"
-                  className="bg-green-600 hover:bg-green-700 text-white"
+                  variant="default"
+                  className="bg-primary hover:bg-primary/80 text-primary-foreground"
                   disabled={loadingOperation.type === 'run' && loadingOperation.messageId === messageId}
                 >
                   {loadingOperation.type === 'run' && loadingOperation.messageId === messageId ? (
@@ -820,8 +822,8 @@ export default function DatabaseQueryApp() {
     };
 
     const messageClass = message.sender === "user"
-            ? "bg-blue-50 dark:bg-blue-900 text-gray-800 dark:text-gray-200"
-            : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200";
+            ? "bg-primary/10 dark:bg-primary/20 text-foreground dark:text-foreground"
+            : "bg-secondary dark:bg-secondary text-foreground dark:text-foreground";
     const errorClass = "bg-red-100 dark:bg-red-900 text-red-900 dark:text-red-100"
 
     const renderResult = () => {
@@ -937,11 +939,11 @@ export default function DatabaseQueryApp() {
           <Avatar className="w-8 h-8">
             <AvatarFallback
               className={
-                message.sender === "user" ? "bg-blue-100" : "bg-gray-300"
+                message.sender === "user" ? "bg-primary/20" : "bg-muted"
               }
             >
               {message.sender === "user" ? (
-                <User className="w-5 h-5 text-blue-600" />
+                <User className="w-5 h-5 text-primary" />
               ) : (
                 // <Bot className="w-5 h-5 text-gray-600" />
                   <Image
@@ -1203,8 +1205,8 @@ export default function DatabaseQueryApp() {
           {/* Left panel (databases and history) - hidden when SQL result panel is */}
           {showLeftPanel && (
             <div className="w-full lg:w-1/5 lg:min-w-[220px] xl:min-w-[250px] absolute lg:relative z-10 bg-white dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent">
-              <Card className="mb-2 h-[calc(100vh-350px)] flex flex-col bg-white dark:bg-gray-800 shadow-lg">
-                <CardHeader className="border-b border-gray-200 dark:border-gray-700 py-2">
+              <Card className="mb-2 h-[calc(100vh-350px)] flex flex-col bg-card border border-border shadow-md">
+                <CardHeader className="border-b border-border py-2">
                   <div className="flex justify-between items-center">
                     <h2 className="text-lg font-semibold">
                       Databases
@@ -1215,13 +1217,13 @@ export default function DatabaseQueryApp() {
                   <div className="flex flex-col h-full">
                     {uniqueTags.length > 0 && (
                       <div className="mb-2 mt-2 px-2">
-                        <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Filter by Tags</div>
+                        <div className="text-xs font-semibold text-muted-foreground dark:text-muted-foreground mb-2">Filter by Tags</div>
                         <div className="flex flex-wrap gap-1 overflow-y-auto">
                           <Button
                             variant={!selectedTag ? "default" : "outline"}
                             size="sm"
                             className={`px-2 py-1 text-xs ${
-                              !selectedTag ? "bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-700 dark:hover:bg-blue-800" : ""
+                              !selectedTag ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "hover:border-primary/50 dark:hover:border-primary/70"
                             }`}
                             onClick={() => handleTagSelect(null)}
                           >
@@ -1233,7 +1235,7 @@ export default function DatabaseQueryApp() {
                               variant={selectedTag === tag ? "default" : "outline"}
                               size="sm"
                               className={`px-2 py-1 text-xs ${
-                                selectedTag === tag ? "bg-blue-600 hover:bg-blue-700 text-white dark:bg-blue-700 dark:hover:bg-blue-800" : ""
+                                selectedTag === tag ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "hover:border-primary/50 dark:hover:border-primary/70"
                               }`}
                               onClick={() => handleTagSelect(tag)}
                             >
@@ -1245,22 +1247,22 @@ export default function DatabaseQueryApp() {
                     )}
                     
                     <ScrollArea className="flex-grow overflow-y-auto">
-                      <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                      <ul className="divide-y divide-border">
                         {filteredConnections.map((connection) => (
                           <li 
                             key={connection.id}
-                            className={`px-2 py-1 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/50 transition-colors duration-150 flex items-center ${
+                            className={`list-item px-2 py-1 cursor-pointer flex items-center ${
                               selectedConnectionId === connection.id 
-                              ? "bg-blue-100 dark:bg-blue-900/70 text-blue-900 dark:text-blue-100" 
-                              : "text-gray-800 dark:text-gray-200"
+                              ? "selected font-medium text-foreground dark:text-foreground pl-1" 
+                              : "text-foreground dark:text-foreground"
                             }`}
                             onClick={() => handleConnectionSelect(connection.id)}
                           >
                             <div className="flex items-center w-full">
                               <Database className={`h-4 w-4 mr-2 ${
                                 selectedConnectionId === connection.id 
-                                ? "text-blue-600 dark:text-blue-400" 
-                                : "text-gray-600 dark:text-gray-400"
+                                ? "text-primary dark:text-primary" 
+                                : "text-muted-foreground dark:text-muted-foreground"
                               }`} />
                               <span className="text-xs font-medium truncate">{connection.projectName}</span>
                             </div>
@@ -1272,8 +1274,8 @@ export default function DatabaseQueryApp() {
                 </CardContent>
               </Card>
 
-              <Card className="h-[245px] bg-white dark:bg-gray-800 shadow-lg">
-                <CardHeader className="border-b border-gray-200 dark:border-gray-700 py-2">
+              <Card className="h-[245px] flex flex-col bg-card border border-border shadow-md">
+                <CardHeader className="border-b border-border py-2">
                   <div className="flex justify-between items-center">
                     <h2 className="text-lg font-semibold">
                       History
@@ -1282,7 +1284,7 @@ export default function DatabaseQueryApp() {
                       onClick={handleNewConversation}
                       variant="outline"
                       size="sm"
-                      className="text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 px-2 py-1 text-xs"
+                      className="text-primary dark:text-primary border-primary dark:border-primary btn-hover-enhanced px-2 py-1 text-xs"
                     >
                       New Chat
                     </Button>
@@ -1290,13 +1292,13 @@ export default function DatabaseQueryApp() {
                 </CardHeader>
                 <CardContent className="p-0">
                   <ScrollArea className="h-[140px] overflow-y-auto">
-                    <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                    <ul className="divide-y divide-border">
                       {selectedConnectionId &&
                         currentConversation?.map((conversation) => (
                             <li
                               key={conversation.id}
-                              className={`px-2 py-1 cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-900/50 transition-colors duration-150 text-xs flex items-center min-h-[32px] ${
-                                conversation.id === conversationId ? "bg-blue-100 dark:bg-blue-900/70 text-blue-900 dark:text-blue-100" : "text-gray-800 dark:text-gray-200"
+                              className={`list-item px-2 py-1 cursor-pointer text-xs flex items-center min-h-[32px] ${
+                                conversation.id === conversationId ? "selected font-medium text-foreground dark:text-foreground pl-1" : "text-foreground dark:text-foreground"
                               }`}
                             >
                               <div className="flex items-center justify-between w-full">
@@ -1313,7 +1315,7 @@ export default function DatabaseQueryApp() {
                                           setEditingTitle("");
                                         }
                                       }}
-                                      className="h-6 text-xs px-1 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                                      className="h-6 text-xs px-1 bg-background dark:bg-background text-foreground dark:text-foreground"
                                       autoFocus
                                     />
                                   </div>
@@ -1334,7 +1336,7 @@ export default function DatabaseQueryApp() {
                                         variant="ghost"
                                         size="icon"
                                         onClick={() => handleTitleSave(conversation.id)}
-                                        className="h-6 w-6 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:bg-green-50 dark:hover:bg-green-900/30"
+                                        className="h-6 w-6 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 btn-hover-enhanced"
                                       >
                                         <Check className="h-3 w-3" />
                                       </Button>
@@ -1345,7 +1347,7 @@ export default function DatabaseQueryApp() {
                                           setEditingTitleId(null);
                                           setEditingTitle("");
                                         }}
-                                        className="h-6 w-6 text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                                        className="h-6 w-6 text-muted-foreground dark:text-muted-foreground hover:text-foreground dark:hover:text-foreground btn-hover-enhanced"
                                       >
                                         <RotateCcw className="h-3 w-3" />
                                       </Button>
@@ -1358,7 +1360,7 @@ export default function DatabaseQueryApp() {
                                         e.stopPropagation();
                                         handleTitleEdit(conversation);
                                       }}
-                                      className="h-6 w-6 text-gray-500 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30"
+                                      className="h-6 w-6 text-muted-foreground dark:text-muted-foreground hover:text-primary dark:hover:text-primary btn-hover-enhanced"
                                     >
                                       <Pencil className="h-3 w-3" />
                                     </Button>
@@ -1378,7 +1380,7 @@ export default function DatabaseQueryApp() {
           {/* Resizable container for chat and SQL panels */}
           <div 
             id="resizable-container" 
-            className={`flex flex-1 h-[calc(100vh-120px)] overflow-hidden ${!showLeftPanel ? 'lg:ml-[220px] xl:ml-0' : ''}`}
+            className={`flex flex-1 h-[calc(100vh-120px)] overflow-hidden`}
           >
             {/* Chat panel */}
             <div 
@@ -1390,7 +1392,7 @@ export default function DatabaseQueryApp() {
               }}
               className="flex flex-col h-full"
             >
-              <Card className="flex-1 flex flex-col bg-white dark:bg-gray-800 shadow-lg overflow-hidden">
+                              <Card className="flex-1 flex flex-col bg-card border border-border shadow-md overflow-hidden">
                 <CardContent className="flex-1 overflow-hidden p-4 relative">
                   <ScrollArea className="h-full pr-4">
                     <div className="space-y-4 h-[calc(80vh-65px)]">
@@ -1408,7 +1410,7 @@ export default function DatabaseQueryApp() {
                     </Button>
                   </ScrollArea>
                 </CardContent>
-                <CardContent className="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 border-t-gray-200 dark:border-t-gray-700 rounded-b-lg">
+                <CardContent className="p-3 border-t border-border bg-secondary dark:bg-secondary rounded-b-lg">
                   <div className="flex space-x-2">
                     <Textarea
                       value={inputMessage}
@@ -1427,7 +1429,7 @@ export default function DatabaseQueryApp() {
                     <Button
                       onClick={handleSendMessage}
                       disabled={isLoading || isStreaming || !selectedConnectionId}
-                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                      className="bg-primary hover:bg-primary/80 text-primary-foreground"
                     >
                       {isLoading ? (
                         <Loader2 className="w-4 h-4 mr-2 animate-spin" />

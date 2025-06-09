@@ -46,8 +46,8 @@ export default function LayoutContent({
     <html lang="en" suppressHydrationWarning>
       <body className={`${inter.variable} font-sans`} data-theme={theme}>
         <Providers>
-          <Theme appearance={theme} accentColor="blue" grayColor="slate" scaling="100%" radius="medium">
-            <nav className="bg-gray-100 dark:bg-gray-800 text-black dark:text-white p-2">
+          <Theme appearance={theme} accentColor="gray" grayColor="gray" scaling="100%" radius="medium">
+            <nav className="bg-card border-b border-border text-card-foreground p-2 shadow-sm">
               <div className="container mx-auto flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <Link href="/" className="hover:opacity-80 transition-opacity">
@@ -58,25 +58,25 @@ export default function LayoutContent({
                 <div className="flex items-center space-x-1 mr-2">
                   <Link 
                     href="/" 
-                    className="hover:text-blue-100 flex items-center px-3 py-2 rounded-md transition-colors hover:bg-gray-700"
+                    className="hover:text-accent flex items-center px-3 py-2 rounded-md transition-colors hover:bg-accent/40 dark:hover:bg-accent/20"
                   >
                     <Home className="h-5 w-5 m-1" />
                   </Link>
                   <Link 
                     href="/settings" 
-                    className="hover:text-blue-100 flex items-center px-3 py-2 rounded-md transition-colors hover:bg-gray-700"
+                    className="hover:text-accent flex items-center px-3 py-2 rounded-md transition-colors hover:bg-accent/40 dark:hover:bg-accent/20"
                   >
                     <Settings className="h-5 w-5 m-1" />
                   </Link>
                   <button
                     onClick={() => setShowAbout(true)}
-                    className="hover:text-blue-100 flex items-center px-3 py-2 rounded-md transition-colors hover:bg-gray-700"
+                    className="hover:text-accent flex items-center px-3 py-2 rounded-md transition-colors hover:bg-accent/40 dark:hover:bg-accent/20"
                   >
                     <HelpCircle className="h-5 w-5 m-1" />
                   </button>
                   <button
                     onClick={toggleTheme}
-                    className="hover:text-blue-100 flex items-center px-3 py-2 rounded-md transition-colors hover:bg-gray-700"
+                    className="hover:text-accent flex items-center px-3 py-2 rounded-md transition-colors hover:bg-accent/40 dark:hover:bg-accent/20"
                     aria-label="Toggle theme"
                   >
                     {theme === 'light' ? <Moon className="h-5 w-5 m-1" /> : <Sun className="h-5 w-5 m-1" />}

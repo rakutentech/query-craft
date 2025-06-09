@@ -110,15 +110,15 @@ export default function ResizableSplitter({
   return (
     <div
       ref={splitterRef}
-      className={`w-2 cursor-col-resize bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors flex items-center justify-center active:bg-blue-500 active:dark:bg-blue-600 ${
-        isDragging ? 'bg-blue-500 dark:bg-blue-600' : ''
+      className={`w-2 cursor-col-resize bg-border dark:bg-border hover:bg-border/80 dark:hover:bg-border/80 transition-colors flex items-center justify-center active:bg-primary active:dark:bg-primary ${
+        isDragging ? 'bg-primary dark:bg-primary' : ''
       } ${className}`}
       onMouseDown={handleMouseDown}
       onTouchStart={handleTouchStart}
       style={{ touchAction: 'none' }}
     >
-      <div className="h-12 w-5 flex items-center justify-center rounded hover:bg-gray-300 dark:hover:bg-gray-600">
-        <GripVertical className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+      <div className="h-12 w-5 flex items-center justify-center rounded hover:bg-accent dark:hover:bg-accent">
+        <GripVertical className="h-5 w-5 text-muted-foreground dark:text-muted-foreground" />
       </div>
     </div>
   );
