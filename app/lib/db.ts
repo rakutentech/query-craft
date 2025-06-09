@@ -11,6 +11,14 @@ import { exec } from 'child_process';
 import path from 'path';
 import crypto from 'crypto';
 
+// Cache for database connection pools
+interface ConnectionPoolCache {
+  [key: string]: {
+    pool: any;
+    lastUsed: number;
+  };
+}
+
 export interface DatabaseConfig {
   type: 'sqlite' | 'mysql';
   mysql?: {
@@ -20,7 +28,7 @@ export interface DatabaseConfig {
     password: string;
     database: string;
   };
-} 
+}
 
 
 export const databaseConfig: DatabaseConfig = {
@@ -34,6 +42,55 @@ export const databaseConfig: DatabaseConfig = {
   } : undefined
 };
 
+// Connection pool caches
+const mysqlStreamingPools: ConnectionPoolCache = {};
+const pgPools: ConnectionPoolCache = {};
+const mariadbPools: ConnectionPoolCache = {};
+
+// Cleanup old connection pools periodically
+const POOL_TTL = 1000 * 60 * 30; // 30 minutes
+setInterval(() => {
+  const now = Date.now();
+  
+  // Clean up MySQL streaming pools
+  Object.keys(mysqlStreamingPools).forEach(key => {
+    if (now - mysqlStreamingPools[key].lastUsed > POOL_TTL) {
+      console.log(`Closing unused MySQL streaming pool: ${key}`);
+      try {
+        mysqlStreamingPools[key].pool.end();
+      } catch (err) {
+        console.error(`Error closing MySQL streaming pool: ${err}`);
+      }
+      delete mysqlStreamingPools[key];
+    }
+  });
+  
+  // Clean up PostgreSQL pools
+  Object.keys(pgPools).forEach(key => {
+    if (now - pgPools[key].lastUsed > POOL_TTL) {
+      console.log(`Closing unused PostgreSQL pool: ${key}`);
+      try {
+        pgPools[key].pool.end();
+      } catch (err) {
+        console.error(`Error closing PostgreSQL pool: ${err}`);
+      }
+      delete pgPools[key];
+    }
+  });
+  
+  // Clean up MariaDB pools
+  Object.keys(mariadbPools).forEach(key => {
+    if (now - mariadbPools[key].lastUsed > POOL_TTL) {
+      console.log(`Closing unused MariaDB pool: ${key}`);
+      try {
+        mariadbPools[key].pool.end();
+      } catch (err) {
+        console.error(`Error closing MariaDB pool: ${err}`);
+      }
+      delete mariadbPools[key];
+    }
+  });
+}, POOL_TTL);
 
 export interface Message {
   id: number;
@@ -100,16 +157,30 @@ let mysqlPool: mysql.Pool | null = null;
 
 export async function getDb() {
   if (databaseConfig.type === 'mysql') {
-    return mysql.createPool({
-      host: databaseConfig.mysql?.host || 'localhost',
-      port: databaseConfig.mysql?.port || 3306,
-      user: databaseConfig.mysql?.user || '',
-      password: databaseConfig.mysql?.password || '',
-      database: databaseConfig.mysql?.database || '',
-      waitForConnections: true,
-      connectionLimit: 10,
-      queueLimit: 0
-    });
+    // Reuse existing MySQL pool if it exists
+    if (!mysqlPool) {
+      mysqlPool = mysql.createPool({
+        host: databaseConfig.mysql?.host || 'localhost',
+        port: databaseConfig.mysql?.port || 3306,
+        user: databaseConfig.mysql?.user || '',
+        password: databaseConfig.mysql?.password || '',
+        database: databaseConfig.mysql?.database || '',
+        waitForConnections: true,
+        connectionLimit: 25, // Increased connection limit
+        queueLimit: 0
+      });
+      
+      // Test the connection to make sure it works
+      try {
+        const [rows] = await mysqlPool.execute('SELECT 1');
+        console.log('MySQL connection pool initialized successfully');
+      } catch (error) {
+        console.error('Failed to initialize MySQL connection pool:', error);
+        mysqlPool = null;
+        throw error;
+      }
+    }
+    return mysqlPool;
   } else {
     if (!sqliteDb) {
       try {
@@ -401,53 +472,146 @@ export async function deleteDatabaseConnection(id: number, userId: string): Prom
 }
 
 export async function testDatabaseConnection(connection: DatabaseConnection): Promise<boolean> {
-  console.log("Testing database connection:", connection.projectName);
+  const connectionKey = `${connection.dbHost}:${connection.dbPort}:${connection.dbUsername}:${connection.dbName}`;
+  
   try {
     switch (connection.dbDriver) {
       case "mysql":
-        const mysqlPool = mysql.createPool({
-          host: connection.dbHost,
-          port: parseInt(connection.dbPort),
-          user: connection.dbUsername,
-          password: connection.dbPassword,
-          database: connection.dbName,
-          connectionLimit: 1
-        });
-        const mysqlConnection = await mysqlPool.getConnection();
-        await mysqlConnection.release();
-        await mysqlPool.end();
-        break;
+        // Use an existing pool if available for this connection
+        if (mysqlStreamingPools[connectionKey]) {
+          console.log(`Using existing MySQL pool for connection test: ${connectionKey}`);
+          const pool = mysqlStreamingPools[connectionKey].pool;
+          
+          // Get a connection from the pool
+          const conn = await new Promise<any>((resolve, reject) => {
+            pool.getConnection((err: any, conn: any) => {
+              if (err) reject(err);
+              else resolve(conn);
+            });
+          });
+          
+          try {
+            // Execute a simple query to test the connection
+            await new Promise<void>((resolve, reject) => {
+              conn.query('SELECT 1', (err: any) => {
+                if (err) reject(err);
+                else resolve();
+              });
+            });
+            
+            mysqlStreamingPools[connectionKey].lastUsed = Date.now();
+            return true;
+          } finally {
+            conn.release(); // Release the connection back to the pool
+          }
+        } else {
+          // Create a temporary connection for testing
+          const tempPool = mysqlStreaming.createPool({
+            host: connection.dbHost,
+            port: parseInt(connection.dbPort),
+            user: connection.dbUsername,
+            password: connection.dbPassword,
+            database: connection.dbName,
+            connectionLimit: 1
+          });
+          
+          try {
+            const conn = await new Promise<any>((resolve, reject) => {
+              tempPool.getConnection((err: any, conn: any) => {
+                if (err) reject(err);
+                else resolve(conn);
+              });
+            });
+            
+            try {
+              await new Promise<void>((resolve, reject) => {
+                conn.query('SELECT 1', (err: any) => {
+                  if (err) reject(err);
+                  else resolve();
+                });
+              });
+              return true;
+            } finally {
+              conn.release();
+              tempPool.end(); // End the temporary pool
+            }
+          } catch (error) {
+            console.error("Error testing MySQL connection:", error);
+            throw error;
+          }
+        }
+        
       case "postgresql":
-        const pgPool = new pg.Pool({
-          host: connection.dbHost,
-          port: parseInt(connection.dbPort),
-          user: connection.dbUsername,
-          password: connection.dbPassword,
-          database: connection.dbName,
-          max: 1
-        });
-        const pgClient = await pgPool.connect();
-        await pgClient.release();
-        await pgPool.end();
-        break;
+        // Use an existing pool if available
+        if (pgPools[connectionKey]) {
+          console.log(`Using existing PostgreSQL pool for connection test: ${connectionKey}`);
+          const pool = pgPools[connectionKey].pool;
+          const client = await pool.connect();
+          
+          try {
+            await client.query('SELECT 1');
+            pgPools[connectionKey].lastUsed = Date.now();
+            return true;
+          } finally {
+            client.release();
+          }
+        } else {
+          // Create a temporary client for testing
+          const client = new pg.Client({
+            host: connection.dbHost,
+            port: parseInt(connection.dbPort),
+            user: connection.dbUsername,
+            password: connection.dbPassword,
+            database: connection.dbName
+          });
+          
+          try {
+            await client.connect();
+            await client.query('SELECT 1');
+            return true;
+          } finally {
+            await client.end();
+          }
+        }
+        
       case "mariadb":
-        const mariadbPool = mariadb.createPool({
-          host: connection.dbHost,
-          port: parseInt(connection.dbPort),
-          user: connection.dbUsername,
-          password: connection.dbPassword,
-          database: connection.dbName,
-          connectionLimit: 1
-        });
-        const mariadbConnection = await mariadbPool.getConnection();
-        await mariadbConnection.release();
-        await mariadbPool.end();
-        break;
+        // Use an existing pool if available
+        if (mariadbPools[connectionKey]) {
+          console.log(`Using existing MariaDB pool for connection test: ${connectionKey}`);
+          const pool = mariadbPools[connectionKey].pool;
+          const conn = await pool.getConnection();
+          
+          try {
+            await conn.query('SELECT 1');
+            mariadbPools[connectionKey].lastUsed = Date.now();
+            return true;
+          } finally {
+            conn.release();
+          }
+        } else {
+          // Create a temporary connection for testing
+          const tempPool = mariadb.createPool({
+            host: connection.dbHost,
+            port: parseInt(connection.dbPort),
+            user: connection.dbUsername,
+            password: connection.dbPassword,
+            database: connection.dbName,
+            connectionLimit: 1
+          });
+          
+          try {
+            const conn = await tempPool.getConnection();
+            await conn.query('SELECT 1');
+            conn.release();
+            return true;
+          } finally {
+            tempPool.end();
+          }
+        }
+        
       default:
         throw new Error(`Unsupported database driver: ${connection.dbDriver}`);
     }
-    console.log("Database connection test successful:", connection.projectName);
-    return true;
   } catch (error) {
     console.error("Error testing database connection:", error);
     throw new Error(`Connection test failed: ${(error as Error).message}`);
@@ -463,53 +627,110 @@ export async function executeQuery(sql: string, connectionId: number, userId: st
 
   let result: any[];
   let pool: any;
+  
+  // Create a unique key for this connection
+  const connectionKey = `${connection.dbHost}:${connection.dbPort}:${connection.dbUsername}:${connection.dbName}`;
+  
   try {
     switch (connection.dbDriver) {
       case "mysql":
-        pool = mysql.createPool({
-          host: connection.dbHost,
-          port: parseInt(connection.dbPort),
-          user: connection.dbUsername,
-          password: connection.dbPassword,
-          database: connection.dbName,
-          connectionLimit: 10
+        // Reuse or create MySQL pool
+        if (!mysqlStreamingPools[connectionKey]) {
+          console.log(`Creating new MySQL pool for ${connectionKey}`);
+          mysqlStreamingPools[connectionKey] = {
+            pool: mysqlStreaming.createPool({
+              host: connection.dbHost,
+              port: parseInt(connection.dbPort),
+              user: connection.dbUsername,
+              password: connection.dbPassword,
+              database: connection.dbName,
+              connectionLimit: 15
+            }),
+            lastUsed: Date.now()
+          };
+        } else {
+          console.log(`Reusing MySQL pool for ${connectionKey}`);
+          mysqlStreamingPools[connectionKey].lastUsed = Date.now();
+        }
+        
+        pool = mysqlStreamingPools[connectionKey].pool;
+        
+        // Get a connection from the pool
+        const mysqlConn = await new Promise<any>((resolve, reject) => {
+          pool.getConnection((err: any, conn: any) => {
+            if (err) reject(err);
+            else resolve(conn);
+          });
         });
-        const [rows] = await pool.query(sql);
-        result = rows;
+        
+        try {
+          const [rows] = await new Promise<any[]>((resolve, reject) => {
+            mysqlConn.query(sql, (err: any, res: any) => {
+              if (err) reject(err);
+              else resolve([res]);
+            });
+          });
+          result = rows;
+        } finally {
+          mysqlConn.release(); // Release the connection back to the pool
+        }
         break;
+        
       case "postgresql":
-        pool = new pg.Pool({
-          host: connection.dbHost,
-          port: parseInt(connection.dbPort),
-          user: connection.dbUsername,
-          password: connection.dbPassword,
-          database: connection.dbName,
-          max: 10
-        });
+        // Reuse or create PostgreSQL pool
+        if (!pgPools[connectionKey]) {
+          console.log(`Creating new PostgreSQL pool for ${connectionKey}`);
+          pgPools[connectionKey] = {
+            pool: new pg.Pool({
+              host: connection.dbHost,
+              port: parseInt(connection.dbPort),
+              user: connection.dbUsername,
+              password: connection.dbPassword,
+              database: connection.dbName,
+              max: 15
+            }),
+            lastUsed: Date.now()
+          };
+        } else {
+          console.log(`Reusing PostgreSQL pool for ${connectionKey}`);
+          pgPools[connectionKey].lastUsed = Date.now();
+        }
+        
+        pool = pgPools[connectionKey].pool;
         const pgResult = await pool.query(sql);
         result = pgResult.rows;
         break;
+        
       case "mariadb":
-        pool = mariadb.createPool({
-          host: connection.dbHost,
-          port: parseInt(connection.dbPort),
-          user: connection.dbUsername,
-          password: connection.dbPassword,
-          database: connection.dbName,
-          connectionLimit: 10
-        });
+        // Reuse or create MariaDB pool
+        if (!mariadbPools[connectionKey]) {
+          console.log(`Creating new MariaDB pool for ${connectionKey}`);
+          mariadbPools[connectionKey] = {
+            pool: mariadb.createPool({
+              host: connection.dbHost,
+              port: parseInt(connection.dbPort),
+              user: connection.dbUsername,
+              password: connection.dbPassword,
+              database: connection.dbName,
+              connectionLimit: 15
+            }),
+            lastUsed: Date.now()
+          };
+        } else {
+          console.log(`Reusing MariaDB pool for ${connectionKey}`);
+          mariadbPools[connectionKey].lastUsed = Date.now();
+        }
+        
+        pool = mariadbPools[connectionKey].pool;
         result = await pool.query(sql);
         break;
+        
       default:
         throw new Error(`Unsupported database driver: ${connection.dbDriver}`);
     }
   } catch (error) {
     console.error("Error executing query:", error);
     throw new Error(`Query execution failed: ${(error as Error).message}`);
-  } finally {
-    if (pool) {
-      await pool.end();
-    }
   }
 
   return result;
@@ -534,16 +755,31 @@ export async function executeQueryStream(sql: string, connectionId: number, user
   let closed = false;
   let pool: any;
 
+  // Create a unique key for this connection
+  const connectionKey = `${connection.dbHost}:${connection.dbPort}:${connection.dbUsername}:${connection.dbName}`;
+
   switch (connection.dbDriver) {
     case "mysql":
-      pool = mysqlStreaming.createPool({
-        host: connection.dbHost,
-        port: parseInt(connection.dbPort),
-        user: connection.dbUsername,
-        password: connection.dbPassword,
-        database: connection.dbName,
-        connectionLimit: 10
-      });
+      // Get or create MySQL pool
+      if (!mysqlStreamingPools[connectionKey]) {
+        console.log(`Creating new MySQL streaming pool for ${connectionKey}`);
+        mysqlStreamingPools[connectionKey] = {
+          pool: mysqlStreaming.createPool({
+            host: connection.dbHost,
+            port: parseInt(connection.dbPort),
+            user: connection.dbUsername,
+            password: connection.dbPassword,
+            database: connection.dbName,
+            connectionLimit: 15
+          }),
+          lastUsed: Date.now()
+        };
+      } else {
+        console.log(`Reusing MySQL streaming pool for ${connectionKey}`);
+        mysqlStreamingPools[connectionKey].lastUsed = Date.now();
+      }
+      
+      pool = mysqlStreamingPools[connectionKey].pool;
 
       const mysqlStream = new ReadableStream({
         async start(controller) {
@@ -590,8 +826,7 @@ export async function executeQueryStream(sql: string, connectionId: number, user
                 controller.enqueue(encoder.encode(JSON.stringify(pendingRows.shift(), jsonBigIntReplacer) + "\n"));
               }
               controller.close();
-              connection.release();
-              pool.end();
+              connection.release(); // Release connection back to pool, but don't end the pool
             });
 
             // Handle error events
@@ -599,8 +834,7 @@ export async function executeQueryStream(sql: string, connectionId: number, user
               console.error("Error executing query:", err.message);
               controller.enqueue(encoder.encode(JSON.stringify({error: err.message}) + "\n"));
               controller.close();
-              connection.release();
-              pool.end();
+              connection.release(); // Release connection back to pool
             });
           });
         }
@@ -613,14 +847,26 @@ export async function executeQueryStream(sql: string, connectionId: number, user
         }
       });
     case "postgresql":
-      pool = new pg.Pool({
-                host: connection.dbHost,
-                port: parseInt(connection.dbPort),
-                user: connection.dbUsername,
-                password: connection.dbPassword,
-                database: connection.dbName,
-                max: 10
-              });
+      // Get or create PostgreSQL pool
+      if (!pgPools[connectionKey]) {
+        console.log(`Creating new PostgreSQL pool for ${connectionKey}`);
+        pgPools[connectionKey] = {
+          pool: new pg.Pool({
+            host: connection.dbHost,
+            port: parseInt(connection.dbPort),
+            user: connection.dbUsername,
+            password: connection.dbPassword,
+            database: connection.dbName,
+            max: 15
+          }),
+          lastUsed: Date.now()
+        };
+      } else {
+        console.log(`Reusing PostgreSQL pool for ${connectionKey}`);
+        pgPools[connectionKey].lastUsed = Date.now();
+      }
+      
+      pool = pgPools[connectionKey].pool;
 
       const postgresqlStream = new ReadableStream({
         async start(controller) {
@@ -663,22 +909,19 @@ export async function executeQueryStream(sql: string, connectionId: number, user
                 controller.enqueue(encoder.encode(JSON.stringify(pendingRows.shift(), jsonBigIntReplacer) + "\n"));
               }
               controller.close();
-              conn.release();
-              pool.end();
+              conn.release(); // Release connection back to pool, but don't end the pool
             });
 
             // Handle error events
             queryStream.on('error', (err: any) => {
               controller.enqueue(encoder.encode(JSON.stringify({error: err.message}) + "\n"));
               controller.close();
-              conn.release();
-              pool.end();
+              conn.release(); // Release connection back to pool
             });
           } catch (err: any) {
             controller.enqueue(encoder.encode(JSON.stringify({ error: err.message }) + '\n'));
             controller.close();
-            conn.release();
-            pool.end();
+            conn.release(); // Release connection back to pool
           }
         }
       });
@@ -690,14 +933,26 @@ export async function executeQueryStream(sql: string, connectionId: number, user
         }
       });
     case "mariadb":
-      pool = mariadb.createPool({
-        host: connection.dbHost,
-        port: parseInt(connection.dbPort),
-        user: connection.dbUsername,
-        password: connection.dbPassword,
-        database: connection.dbName,
-        connectionLimit: 10
-      });
+      // Get or create MariaDB pool
+      if (!mariadbPools[connectionKey]) {
+        console.log(`Creating new MariaDB pool for ${connectionKey}`);
+        mariadbPools[connectionKey] = {
+          pool: mariadb.createPool({
+            host: connection.dbHost,
+            port: parseInt(connection.dbPort),
+            user: connection.dbUsername,
+            password: connection.dbPassword,
+            database: connection.dbName,
+            connectionLimit: 15
+          }),
+          lastUsed: Date.now()
+        };
+      } else {
+        console.log(`Reusing MariaDB pool for ${connectionKey}`);
+        mariadbPools[connectionKey].lastUsed = Date.now();
+      }
+      
+      pool = mariadbPools[connectionKey].pool;
 
       const mariadbStream = new ReadableStream({
         async start(controller) {
@@ -738,20 +993,16 @@ export async function executeQueryStream(sql: string, connectionId: number, user
                 controller.enqueue(encoder.encode(JSON.stringify(pendingRows.shift(), jsonBigIntReplacer) + "\n"));
               }
               controller.close();
-              connection.release();
-              pool.end();
+              connection.release(); // Release connection back to pool, but don't end the pool
             });
 
             queryStream.on('error', (err: any) => {
               controller.enqueue(encoder.encode(JSON.stringify({ error: err.message }) + "\n"));
               controller.close();
-              connection.release();
-              pool.end();
             });
           } catch (error) {
             controller.enqueue(encoder.encode(JSON.stringify({ error: (error as Error).message }) + "\n"));
             controller.close();
-            pool.end();
           }
         }
       });
@@ -773,40 +1024,81 @@ function jsonBigIntReplacer(_key: string, value: any) {
 // Add this new function to retrieve the database schema
 export async function getDatabaseSchema(connection: DatabaseConnection): Promise<string> {
   let schema = '';
+  const connectionKey = `${connection.dbHost}:${connection.dbPort}:${connection.dbUsername}:${connection.dbName}`;
 
   try {
     switch (connection.dbDriver) {
       case "mysql":
-        const mysqlPool = mysql.createPool({
-          host: connection.dbHost,
-          port: parseInt(connection.dbPort),
-          user: connection.dbUsername,
-          password: connection.dbPassword,
-          database: connection.dbName,
-          connectionLimit: 1
+        // Get or create MySQL pool
+        if (!mysqlStreamingPools[connectionKey]) {
+          console.log(`Creating new MySQL pool for ${connectionKey}`);
+          mysqlStreamingPools[connectionKey] = {
+            pool: mysqlStreaming.createPool({
+              host: connection.dbHost,
+              port: parseInt(connection.dbPort),
+              user: connection.dbUsername,
+              password: connection.dbPassword,
+              database: connection.dbName,
+              connectionLimit: 15
+            }),
+            lastUsed: Date.now()
+          };
+        } else {
+          console.log(`Reusing MySQL pool for ${connectionKey}`);
+          mysqlStreamingPools[connectionKey].lastUsed = Date.now();
+        }
+        
+        const mysqlPool = mysqlStreamingPools[connectionKey].pool;
+        
+        // Get a connection from the pool
+        const mysqlConn = await new Promise<any>((resolve, reject) => {
+          mysqlPool.getConnection((err: any, conn: any) => {
+            if (err) reject(err);
+            else resolve(conn);
+          });
         });
-        const mysqlConnection = await mysqlPool.getConnection();
-        schema = await getMySQLSchema(mysqlConnection, connection.dbName);
-        await mysqlConnection.release();
-        await mysqlPool.end();
+        
+        try {
+          schema = await getMySQLSchema(mysqlConn, connection.dbName);
+        } finally {
+          mysqlConn.release(); // Release the connection back to the pool
+        }
         break;
+        
       case "mariadb":
-        const mariadbPool = mariadb.createPool({
-          host: connection.dbHost,
-          port: parseInt(connection.dbPort),
-          user: connection.dbUsername,
-          password: connection.dbPassword,
-          database: connection.dbName,
-          connectionLimit: 1
-        });
+        // Get or create MariaDB pool
+        if (!mariadbPools[connectionKey]) {
+          console.log(`Creating new MariaDB pool for ${connectionKey}`);
+          mariadbPools[connectionKey] = {
+            pool: mariadb.createPool({
+              host: connection.dbHost,
+              port: parseInt(connection.dbPort),
+              user: connection.dbUsername,
+              password: connection.dbPassword,
+              database: connection.dbName,
+              connectionLimit: 15
+            }),
+            lastUsed: Date.now()
+          };
+        } else {
+          console.log(`Reusing MariaDB pool for ${connectionKey}`);
+          mariadbPools[connectionKey].lastUsed = Date.now();
+        }
+        
+        const mariadbPool = mariadbPools[connectionKey].pool;
         const mariadbConnection = await mariadbPool.getConnection();
-        schema = await getMariaDBSchema(mariadbConnection, connection.dbName);
-        await mariadbConnection.release();
-        await mariadbPool.end();
+        
+        try {
+          schema = await getMariaDBSchema(mariadbConnection, connection.dbName);
+        } finally {
+          mariadbConnection.release(); // Release the connection back to the pool
+        }
         break;
+        
       case "postgresql":
         schema = await getPostgreSQLSchema(connection);
         break;
+        
       default:
         throw new Error(`Unsupported database driver: ${connection.dbDriver}`);
     }
@@ -1076,4 +1368,64 @@ export async function updateDatabaseConnection(connection: DatabaseConnection, u
       ]
     );
   }
+}
+
+// Add cleanup for graceful shutdown
+process.on('SIGINT', async () => {
+  console.log('Received SIGINT. Closing all database connections...');
+  await cleanupAllPools();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('Received SIGTERM. Closing all database connections...');
+  await cleanupAllPools();
+  process.exit(0);
+});
+
+// Function to close all database pools
+async function cleanupAllPools() {
+  console.log('Cleaning up all database connection pools...');
+  
+  // Close MySQL app pool
+  if (mysqlPool) {
+    try {
+      console.log('Closing main MySQL pool');
+      await mysqlPool.end();
+    } catch (err) {
+      console.error('Error closing main MySQL pool:', err);
+    }
+  }
+  
+  // Close MySQL streaming pools
+  for (const key of Object.keys(mysqlStreamingPools)) {
+    try {
+      console.log(`Closing MySQL streaming pool: ${key}`);
+      await mysqlStreamingPools[key].pool.end();
+    } catch (err) {
+      console.error(`Error closing MySQL streaming pool ${key}:`, err);
+    }
+  }
+  
+  // Close PostgreSQL pools
+  for (const key of Object.keys(pgPools)) {
+    try {
+      console.log(`Closing PostgreSQL pool: ${key}`);
+      await pgPools[key].pool.end();
+    } catch (err) {
+      console.error(`Error closing PostgreSQL pool ${key}:`, err);
+    }
+  }
+  
+  // Close MariaDB pools
+  for (const key of Object.keys(mariadbPools)) {
+    try {
+      console.log(`Closing MariaDB pool: ${key}`);
+      await mariadbPools[key].pool.end();
+    } catch (err) {
+      console.error(`Error closing MariaDB pool ${key}:`, err);
+    }
+  }
+  
+  console.log('All database connection pools closed');
 }
