@@ -882,25 +882,36 @@ export default function DatabaseQueryApp() {
             message.sender === "user" ? "flex-row-reverse space-x-reverse" : ""
           }`}
         >
-          <Avatar className="w-8 h-8">
-            <AvatarFallback
-              className={
-                message.sender === "user" ? "bg-primary/20" : "bg-muted"
-              }
-            >
-              {message.sender === "user" ? (
-                <User className="w-5 h-5 text-primary" />
-              ) : (
-                // <Bot className="w-5 h-5 text-gray-600" />
-                  <Image
-                      src={imagePath} // Path to your custom icon in the public folder
-                      alt={`${providerConfig.selectedProvider} Icon`}
-                      width={20} // Adjust the width as needed
-                      height={20} // Adjust the height as needed
+          {message.sender === "user" ? (
+            <div className="flex items-center space-x-2">
+              <Avatar className="w-8 h-8">
+                {session?.user?.image ? (
+                  <img
+                    src={session.user.image}
+                    alt={session.user.name || 'User avatar'}
+                    className="w-full h-full object-cover"
                   />
-              )}
-            </AvatarFallback>
-          </Avatar>
+                ) : (
+                  <AvatarFallback className="bg-primary/20">
+                      <User className="w-5 h-5 text-primary" />
+                  </AvatarFallback>
+                )}
+              </Avatar>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2">
+              <Avatar className="w-8 h-8">
+                <AvatarFallback className="bg-muted">
+                  <Image
+                    src={imagePath}
+                    alt={`${providerConfig.selectedProvider} Icon`}
+                    width={20}
+                    height={20}
+                  />
+                </AvatarFallback>
+              </Avatar>
+            </div>
+          )}
           <div className={`rounded-lg p-3 ${isAIProviderError? errorClass : messageClass} max-w-[600px] shadow-md`}>
             {isAIProviderError ? (
               <Alert variant="destructive">

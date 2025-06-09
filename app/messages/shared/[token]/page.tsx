@@ -672,56 +672,74 @@ export default function SharedMessagePage({ params }: { params: { token: string 
               className="h-full"
             >
               <div className="bg-white rounded-lg shadow-lg p-6 h-full overflow-auto">
-                <div className="flex items-start space-x-4">
-                  <Avatar className="w-8 h-8">
-                    <AvatarFallback
-                      className={
-                        message.sender === "user" ? "bg-blue-100" : "bg-gray-300"
-                      }
-                    >
-                      {message.sender === "user" ? (
-                        <User className="w-5 h-5 text-blue-600" />
-                      ) : (
-                        <Bot className="w-5 h-5 text-gray-600" />
-                      )}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    {message.error ? (
-                      <Alert variant="destructive" className="mb-4">
-                        <AlertTitle>Error</AlertTitle>
-                        <AlertDescription>{message.content}</AlertDescription>
-                      </Alert>
+                <div className="flex flex-col space-y-6">
+                  <div className="flex items-start">
+                    {message.sender === "user" && session?.user ? (
+                      <div className="flex items-center space-x-2 min-w-[120px]">
+                        <Avatar className="w-8 h-8">
+                          {session.user.image ? (
+                            <img
+                              src={session.user.image}
+                              alt={session.user.name || 'User avatar'}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <AvatarFallback className="bg-blue-100">
+                                <User className="w-5 h-5 text-blue-600" />
+                            </AvatarFallback>
+                          )}
+                        </Avatar>
+                      </div>
                     ) : (
-                      <div className="prose dark:prose-invert max-w-none">
-                        {renderContent(message.content)}
+                      <div className="flex items-center space-x-2 min-w-[120px]">
+                        <Avatar className="w-8 h-8">
+                          <AvatarFallback className="bg-gray-300">
+                            {message.sender === "user" ? (
+                              <User className="w-5 h-5 text-blue-600" />
+                            ) : (
+                              <Bot className="w-5 h-5 text-gray-600" />
+                            )}
+                          </AvatarFallback>
+                        </Avatar>
                       </div>
                     )}
-                    {message.result && (
-                      <div className="mt-4 bg-white rounded-md shadow-inner overflow-x-auto">
-                        {renderResult()}
-                      </div>
-                    )}
-                    <p className="text-xs text-gray-500 mt-2">
-                      {formatJapanTime(message.timestamp)}
-                    </p>
-                    
-                    {isStreaming && (
-                      <div className="mt-4 text-right">
-                        <Button
-                          onClick={() => {
-                            setStopStreaming(true);
-                            stopStreamingRef.current = true;
-                          }}
-                          variant="destructive"
-                          size="sm"
-                          className="mt-2"
-                        >
-                          <Ban className="w-3 h-3 mr-1" />
-                          Stop Streaming
-                        </Button>
-                      </div>
-                    )}
+                    <div className="flex-1 ml-4">
+                      {message.error ? (
+                        <Alert variant="destructive" className="mb-4">
+                          <AlertTitle>Error</AlertTitle>
+                          <AlertDescription>{message.content}</AlertDescription>
+                        </Alert>
+                      ) : (
+                        <div className="prose dark:prose-invert max-w-none">
+                          {renderContent(message.content)}
+                        </div>
+                      )}
+                      {message.result && (
+                        <div className="mt-4 bg-white rounded-md shadow-inner overflow-x-auto">
+                          {renderResult()}
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500 mt-2">
+                        {formatJapanTime(message.timestamp)}
+                      </p>
+                      
+                      {isStreaming && (
+                        <div className="mt-4 text-right">
+                          <Button
+                            onClick={() => {
+                              setStopStreaming(true);
+                              stopStreamingRef.current = true;
+                            }}
+                            variant="destructive"
+                            size="sm"
+                            className="mt-2"
+                          >
+                            <Ban className="w-3 h-3 mr-1" />
+                            Stop Streaming
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
