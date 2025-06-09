@@ -140,7 +140,18 @@ export default function SqlResultPanel({ results, onClose, hasError = false }: S
   const columns = Object.keys(results[0]).map(key => 
     columnHelper.accessor(key, {
       header: () => <span className="font-medium">{key}</span>,
-      cell: info => <span>{String(info.getValue() ?? '')}</span>,
+      cell: info => {
+        const value = info.getValue();
+        // For long text, use text ellipsis but allow hovering to see full content
+        if (typeof value === 'string' && value.length > 50) {
+          return (
+            <div className="max-w-xs truncate" title={value}>
+              {value}
+            </div>
+          );
+        }
+        return <span>{String(value ?? '')}</span>;
+      },
     })
   );
 
@@ -179,61 +190,66 @@ export default function SqlResultPanel({ results, onClose, hasError = false }: S
       </CardHeader>
       <CardContent className="flex-1 p-0 overflow-hidden">
         <div className="flex flex-col h-full">
-          <ScrollArea className="flex-1 overflow-auto">
-            <div className="relative w-full overflow-auto">
-              <table className="w-full table-auto border-collapse">
-                <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
-                  {table.getHeaderGroups().map(headerGroup => (
-                    <tr key={headerGroup.id}>
-                      {headerGroup.headers.map(header => (
-                        <th 
-                          key={header.id} 
-                          className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700 whitespace-nowrap"
-                          onClick={header.column.getToggleSortingHandler()}
-                          style={{ cursor: 'pointer' }}
-                        >
-                          <div className="flex items-center">
-                            {flexRender(
-                              header.column.columnDef.header,
-                              header.getContext()
-                            )}
-                            <span className="ml-1">
-                              {{
-                                asc: <ChevronUp className="h-4 w-4" />,
-                                desc: <ChevronDown className="h-4 w-4" />,
-                              }[header.column.getIsSorted() as string] ?? null}
-                            </span>
-                          </div>
-                        </th>
+          <ScrollArea className="flex-1">
+            <div className="overflow-auto">
+              <div className="min-w-full inline-block align-middle">
+                <div className="overflow-x-auto max-w-full">
+                  <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700 table-fixed" style={{ width: columns.length * 200 + 'px', maxWidth: 'none' }}>
+                    <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0 z-10">
+                      {table.getHeaderGroups().map(headerGroup => (
+                        <tr key={headerGroup.id}>
+                          {headerGroup.headers.map(header => (
+                            <th 
+                              key={header.id} 
+                              className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider border-b border-gray-200 dark:border-gray-700 whitespace-nowrap"
+                              onClick={header.column.getToggleSortingHandler()}
+                              style={{ cursor: 'pointer', minWidth: '150px', maxWidth: '300px' }}
+                            >
+                              <div className="flex items-center">
+                                {flexRender(
+                                  header.column.columnDef.header,
+                                  header.getContext()
+                                )}
+                                <span className="ml-1">
+                                  {{
+                                    asc: <ChevronUp className="h-4 w-4" />,
+                                    desc: <ChevronDown className="h-4 w-4" />,
+                                  }[header.column.getIsSorted() as string] ?? null}
+                                </span>
+                              </div>
+                            </th>
+                          ))}
+                        </tr>
                       ))}
-                    </tr>
-                  ))}
-                </thead>
-                <tbody>
-                  {table.getRowModel().rows.map(row => (
-                    <tr 
-                      key={row.id}
-                      className={`${
-                        row.index % 2 === 0 
-                          ? 'bg-white dark:bg-gray-900' 
-                          : 'bg-gray-50 dark:bg-gray-800'
-                      } hover:bg-gray-100 dark:hover:bg-gray-700`}
-                    >
-                      {row.getVisibleCells().map(cell => (
-                        <td
-                          key={cell.id}
-                          className="px-4 py-2 text-sm text-gray-900 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700"
+                    </thead>
+                    <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                      {table.getRowModel().rows.map(row => (
+                        <tr 
+                          key={row.id}
+                          className={`${
+                            row.index % 2 === 0 
+                              ? 'bg-white dark:bg-gray-900' 
+                              : 'bg-gray-50 dark:bg-gray-800'
+                          } hover:bg-gray-100 dark:hover:bg-gray-700`}
                         >
-                          {flexRender(
-                            cell.column.columnDef.cell,
-                            cell.getContext()
-                          )}
-                        </td>
+                          {row.getVisibleCells().map(cell => (
+                            <td
+                              key={cell.id}
+                              className="px-4 py-2 text-sm text-gray-900 dark:text-gray-200 border-b border-gray-200 dark:border-gray-700 whitespace-nowrap overflow-hidden text-ellipsis"
+                              style={{ maxWidth: '300px' }}
+                            >
+                              {flexRender(
+                                cell.column.columnDef.cell,
+                                cell.getContext()
+                              )}
+                            </td>
+                          ))}
+                        </tr>
                       ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
             </div>
           </ScrollArea>
 

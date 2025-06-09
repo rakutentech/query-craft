@@ -57,6 +57,7 @@ import Image from "next/image";
 import {AI_PROVIDER_ERROR} from "@/constants/error";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import SqlResultPanel from './SqlResultPanel';
+import ResizableSplitter from './ResizableSplitter';
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 const ENABLE_OAUTH = process.env.NEXT_PUBLIC_ENABLE_OAUTH;
@@ -152,6 +153,7 @@ export default function DatabaseQueryApp() {
     isLarge: false,  // >= 1280px (xl breakpoint)
     isMedium: false  // >= 768px (md breakpoint)
   });
+  const [panelSplit, setPanelSplit] = useState<number>(50); // Default 50% split
 
   useEffect(() => {
     checkSettings();
@@ -840,39 +842,48 @@ export default function DatabaseQueryApp() {
                     View in Panel
                   </Button>
                 </div>
-                <table className="w-full table-auto min-w-max">
-                  <thead>
-                  <tr className="bg-gray-50">
-                    {Object.keys(message.result[0]).map((key) => (
-                        <th
-                            key={key}
-                            className={`px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap ${key === 'error' ? errorClass : ""}`}
+                <div className="overflow-x-auto rounded-md">
+                  <table className="w-full table-auto min-w-max border-collapse">
+                    <thead>
+                    <tr className="bg-gray-50 dark:bg-gray-800 border-b dark:border-gray-700">
+                      {Object.keys(message.result[0]).map((key) => (
+                          <th
+                              key={key}
+                              className={`px-4 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap 
+                                ${key === 'error' 
+                                  ? "text-red-600 dark:text-red-400" 
+                                  : "text-gray-600 dark:text-gray-300"}`}
+                          >
+                            {key}
+                          </th>
+                      ))}
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {message.result.map((row, index) => (
+                        <tr
+                            key={index}
+                            className={`${
+                                row.error 
+                                  ? "bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200" 
+                                  : index % 2 === 0 
+                                    ? "bg-white dark:bg-gray-900" 
+                                    : "bg-gray-50 dark:bg-gray-800"
+                            }`}
                         >
-                          {key}
-                        </th>
+                          {Object.values(row).map((value, idx) => (
+                              <td
+                                  key={idx}
+                                  className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200 border-b dark:border-gray-700"
+                              >
+                                {String(value)}
+                              </td>
+                          ))}
+                        </tr>
                     ))}
-                  </tr>
-                  </thead>
-                  <tbody>
-                  {message.result.map((row, index) => (
-                      <tr
-                          key={index}
-                          className={`${
-                              row.error ? errorClass : index % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800"
-                          }`}
-                      >
-                        {Object.values(row).map((value, idx) => (
-                            <td
-                                key={idx}
-                                className="px-4 py-2 whitespace-nowrap text-sm text-gray-900"
-                            >
-                              {String(value)}
-                            </td>
-                        ))}
-                      </tr>
-                  ))}
-                  </tbody>
-                </table>
+                    </tbody>
+                  </table>
+                </div>
               </div>
             )
           ) : "affectedRows" in message.result ? (
@@ -946,7 +957,7 @@ export default function DatabaseQueryApp() {
               renderContent(message.content)
             )}
             {message.result && (
-              <div className="mt-3 bg-white rounded-md shadow-inner overflow-x-auto">
+              <div className="mt-3 bg-white dark:bg-gray-800 rounded-md shadow-inner overflow-x-auto">
                 {renderResult()}
               </div>
             )}
@@ -1097,6 +1108,21 @@ export default function DatabaseQueryApp() {
       window.removeEventListener('resize', handleResize);
     };
   }, [showResultPanel]);
+
+  // Function to handle resizing between chat and SQL result panels
+  const handlePanelResize = (newPosition: number) => {
+    setPanelSplit(newPosition);
+    // Save preference to localStorage for persistence
+    localStorage.setItem('panelSplitPosition', newPosition.toString());
+  };
+
+  // Load saved panel split preference on mount
+  useEffect(() => {
+    const savedSplit = localStorage.getItem('panelSplitPosition');
+    if (savedSplit) {
+      setPanelSplit(parseFloat(savedSplit));
+    }
+  }, []);
 
   if (status === "loading") {
     return (
@@ -1338,99 +1364,125 @@ export default function DatabaseQueryApp() {
             </div>
           )}
 
-          {/* Middle panel (chat) - adjusts width based on what else is visible */}
-          <div className={`
-            flex-1 flex flex-col h-[calc(100vh-120px)]
-            ${showLeftPanel && !showResultPanel ? 'lg:ml-[220px] xl:ml-0 lg:w-3/4' : ''} 
-            ${showResultPanel ? 
-              'hidden lg:flex lg:w-1/2 xl:w-2/5' 
-              : 'w-full'
-            }
-          `}>
-            <Card className="flex-1 flex flex-col bg-white dark:bg-gray-800 shadow-lg">
-              <CardContent className="flex-1 overflow-hidden p-4 relative">
-                <ScrollArea className="h-full pr-4">
-                  <div className="space-y-4 h-[calc(80vh-65px)]">
-                    {messages.map(renderMessage)}
-                    <div ref={messagesEndRef} />
-                  </div>
-                  <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={scrollToBottom}
-                      aria-label="Scroll to Bottom"
-                      className="absolute bottom-0 right-4 z-10 shadow-lg"
-                  >
-                    <ArrowDown className="w-4 h-4 mr-1" />
-                  </Button>
-                </ScrollArea>
-              </CardContent>
-              <CardContent className="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 border-t-gray-200 dark:border-t-gray-700 rounded-b-lg">
-                <div className="flex space-x-2">
-                  <Textarea
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    placeholder="Type your query..."
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                    className="flex-1 min-h-[30px] max-h-[100px] resize-y"
-                    disabled={!selectedConnectionId}
-                  />
-                  <div className="flex flex-col items-end">
-                  <Button
-                    onClick={handleSendMessage}
-                    disabled={isLoading || isStreaming || !selectedConnectionId}
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4 mr-2" />
+          {/* Resizable container for chat and SQL panels */}
+          <div 
+            id="resizable-container" 
+            className={`flex flex-1 h-[calc(100vh-120px)] overflow-hidden ${!showLeftPanel ? 'lg:ml-[220px] xl:ml-0' : ''}`}
+          >
+            {/* Chat panel */}
+            <div 
+              style={{ 
+                width: showResultPanel ? `${panelSplit}%` : '100%',
+                minWidth: showResultPanel ? '20%' : '100%',
+                maxWidth: showResultPanel ? '80%' : '100%',
+                transition: showResultPanel ? 'none' : 'width 0.2s ease-in-out'
+              }}
+              className="flex flex-col h-full"
+            >
+              <Card className="flex-1 flex flex-col bg-white dark:bg-gray-800 shadow-lg overflow-hidden">
+                <CardContent className="flex-1 overflow-hidden p-4 relative">
+                  <ScrollArea className="h-full pr-4">
+                    <div className="space-y-4 h-[calc(80vh-65px)]">
+                      {messages.map(renderMessage)}
+                      <div ref={messagesEndRef} />
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={scrollToBottom}
+                        aria-label="Scroll to Bottom"
+                        className="absolute bottom-0 right-4 z-10 shadow-lg"
+                    >
+                      <ArrowDown className="w-4 h-4 mr-1" />
+                    </Button>
+                  </ScrollArea>
+                </CardContent>
+                <CardContent className="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 border-t-gray-200 dark:border-t-gray-700 rounded-b-lg">
+                  <div className="flex space-x-2">
+                    <Textarea
+                      value={inputMessage}
+                      onChange={(e) => setInputMessage(e.target.value)}
+                      placeholder="Type your query..."
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
+                      className="flex-1 min-h-[30px] max-h-[100px] resize-y"
+                      disabled={!selectedConnectionId}
+                    />
+                    <div className="flex flex-col items-end">
+                    <Button
+                      onClick={handleSendMessage}
+                      disabled={isLoading || isStreaming || !selectedConnectionId}
+                      className="bg-blue-600 hover:bg-blue-700 text-white"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4 mr-2" />
+                      )}
+                      Send
+                    </Button>
+                    {isStreaming && (
+                        <Button
+                            onClick={() => {
+                              setStopStreaming(true);
+                              stopStreamingRef.current = true;
+                            }}
+                            variant="destructive"
+                            className="mt-2"
+                            size="icon"
+                            aria-label="Stop Streaming"
+                        >
+                          <Ban className="w-3 h-3" />
+                        </Button>
                     )}
-                    Send
-                  </Button>
-                  {isStreaming && (
-                      <Button
-                          onClick={() => {
-                            setStopStreaming(true);
-                            stopStreamingRef.current = true;
-                          }}
-                          variant="destructive"
-                          className="mt-2"
-                          size="icon"
-                          aria-label="Stop Streaming"
-                      >
-                        <Ban className="w-3 h-3" />
-                      </Button>
-                  )}
+                    </div>
                   </div>
-                </div>
-                {!selectedConnectionId && (
-                  <Alert variant="destructive" className="mt-4">
-                    <AlertTitle>No database selected</AlertTitle>
-                    <AlertDescription>
-                      Please select a database connection to start querying.
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Right panel (SQL results) - takes appropriate width */}
-          {showResultPanel && (
-            <div className="w-full lg:w-1/2 xl:w-3/5 flex-1 h-[calc(100vh-120px)]">
-              <SqlResultPanel 
-                results={activeQueryResult?.result} 
-                hasError={activeQueryResult?.hasError || false}
-                onClose={closeResultPanel} 
-              />
+                  {!selectedConnectionId && (
+                    <Alert variant="destructive" className="mt-4">
+                      <AlertTitle>No database selected</AlertTitle>
+                      <AlertDescription>
+                        Please select a database connection to start querying.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
             </div>
-          )}
+
+            {/* Resizable splitter - only shown when SQL result panel is active */}
+            {showResultPanel && (
+              <ResizableSplitter
+                onResize={handlePanelResize}
+                initialPosition={panelSplit}
+                minLeftWidth={20}
+                minRightWidth={20}
+                className="h-full flex-shrink-0"
+              />
+            )}
+
+            {/* SQL Result panel */}
+            {showResultPanel && (
+              <div 
+                style={{ 
+                  width: `${100 - panelSplit}%`,
+                  minWidth: '20%',
+                  maxWidth: '80%',
+                  transition: 'none'
+                }}
+                className="h-full flex-shrink-0"
+              >
+                <SqlResultPanel 
+                  results={activeQueryResult?.result} 
+                  hasError={activeQueryResult?.hasError || false}
+                  onClose={closeResultPanel} 
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
