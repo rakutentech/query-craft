@@ -832,67 +832,13 @@ export default function DatabaseQueryApp() {
       return (
         <div className="max-h-[300px] overflow-auto">
           {Array.isArray(message.result) ? (
-            message.result.length === 0 ? (
+            message.result.length === 0 && (
               <Alert>
                 <AlertTitle>No Results</AlertTitle>
                 <AlertDescription>
                   The query returned no results.
                 </AlertDescription>
               </Alert>
-            ) : (
-              <div>
-                <div className="flex justify-end mb-2">
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => viewResultInPanel(message.result!, message.error || false)}
-                  >
-                    View in Panel
-                  </Button>
-                </div>
-                <div className="overflow-x-auto rounded-md">
-                  <table className="w-full table-auto min-w-max border-collapse">
-                    <thead>
-                    <tr className="bg-gray-50 dark:bg-gray-800 border-b dark:border-gray-700">
-                      {Object.keys(message.result[0]).map((key) => (
-                          <th
-                              key={key}
-                              className={`px-4 py-2 text-left text-xs font-medium uppercase tracking-wider whitespace-nowrap 
-                                ${key === 'error' 
-                                  ? "text-red-600 dark:text-red-400" 
-                                  : "text-gray-600 dark:text-gray-300"}`}
-                          >
-                            {key}
-                          </th>
-                      ))}
-                    </tr>
-                    </thead>
-                    <tbody>
-                    {message.result.map((row, index) => (
-                        <tr
-                            key={index}
-                            className={`${
-                                row.error 
-                                  ? "bg-red-50 dark:bg-red-900/30 text-red-800 dark:text-red-200" 
-                                  : index % 2 === 0 
-                                    ? "bg-white dark:bg-gray-900" 
-                                    : "bg-gray-50 dark:bg-gray-800"
-                            }`}
-                        >
-                          {Object.values(row).map((value, idx) => (
-                              <td
-                                  key={idx}
-                                  className="px-4 py-2 whitespace-nowrap text-sm text-gray-900 dark:text-gray-200 border-b dark:border-gray-700"
-                              >
-                                {String(value)}
-                              </td>
-                          ))}
-                        </tr>
-                    ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
             )
           ) : "affectedRows" in message.result ? (
             <Alert>
@@ -1274,7 +1220,7 @@ export default function DatabaseQueryApp() {
                 </CardContent>
               </Card>
 
-              <Card className="h-[245px] flex flex-col bg-card border border-border shadow-md">
+              <Card className="h-[225px] flex flex-col bg-card border border-border shadow-md">
                 <CardHeader className="border-b border-border py-2">
                   <div className="flex justify-between items-center">
                     <h2 className="text-lg font-semibold">
