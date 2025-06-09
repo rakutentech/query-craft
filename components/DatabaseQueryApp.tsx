@@ -50,9 +50,9 @@ import {
   useChatProviderConfig
 } from "@/app/context/ChatProviderConfigContext";
 import { useToast } from "@/components/ui/use-toast";
-
 import Image from "next/image";
 import {AI_PROVIDER_ERROR} from "@/constants/error";
+import { Box, Flex, Text } from "@radix-ui/themes";
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 const ENABLE_OAUTH = process.env.NEXT_PUBLIC_ENABLE_OAUTH;
@@ -665,7 +665,7 @@ export default function DatabaseQueryApp() {
           const currentSql = message.editedSql || sql;
 
           return (
-            <div key={index} className="my-3 bg-blue-100 text-blue-900 p-3 rounded-lg">
+            <div key={index} className="my-3 bg-blue-100 dark:bg-blue-900 text-blue-900 dark:text-blue-100 p-3 rounded-lg">
               <div className="flex justify-between items-center mb-2">
                 <p className="font-semibold">Generated SQL:</p>
                 <div className="flex gap-2">
@@ -776,9 +776,9 @@ export default function DatabaseQueryApp() {
     };
 
     const messageClass = message.sender === "user"
-            ? "bg-blue-50 text-gray-800"
-            : "bg-gray-100 text-gray-800";
-    const errorClass = "bg-red-100 text-red-900"
+            ? "bg-blue-50 dark:bg-blue-900 text-gray-800 dark:text-gray-200"
+            : "bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200";
+    const errorClass = "bg-red-100 dark:bg-red-900 text-red-900 dark:text-red-100"
 
     const renderResult = () => {
       if (!message.result) return null;
@@ -812,7 +812,7 @@ export default function DatabaseQueryApp() {
                           <tr
                               key={index}
                               className={`${
-                                  row.error ? errorClass : index % 2 === 0 ? "bg-white" : "bg-gray-50"
+                                  row.error ? errorClass : index % 2 === 0 ? "bg-white dark:bg-gray-900" : "bg-gray-50 dark:bg-gray-800"
                               }`}
                           >
                             {Object.values(row).map((value, idx) => (
@@ -1008,10 +1008,10 @@ export default function DatabaseQueryApp() {
   }
 
   return (
-    <div className="bg-gray-100 min-h-screen">
+    <Box className="min-h-screen">
       <div className="container mx-auto py-2 px-2">
-        <div className="flex justify-between items-center border-b border-gray-200 pb-2">
-        <h1 className="text-2xl items-center font-bold p-2 text-gray-800">
+        <div className="flex justify-between items-center border-b border-gray-200 dark:border-gray-700 pb-2">
+        <h1 className="text-2xl items-center font-bold p-2">
           Chat
         </h1>
           <div className="flex items-center space-x-4">
@@ -1033,7 +1033,7 @@ export default function DatabaseQueryApp() {
                   </Avatar>
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">{session.user?.name}</span>
-                    <span className="text-xs text-gray-500">{session.user?.email}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{session.user?.email}</span>
                   </div>
                   <Button
                     variant="outline"
@@ -1059,9 +1059,9 @@ export default function DatabaseQueryApp() {
         <div className="flex space-x-6">
           <div className="w-1/4 min-w-[250px]">
             <Card className="mb-2 h-[calc(100vh-350px)] flex flex-col">
-              <CardHeader className="border-b border-gray-200 pb-2">
+              <CardHeader className="border-b border-gray-200 dark:border-gray-700 pb-2">
                 <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-semibold text-gray-800">
+                  <h2 className="text-xl font-semibold">
                     Databases
                   </h2>
                 </div>
@@ -1070,7 +1070,7 @@ export default function DatabaseQueryApp() {
                 <div className="flex flex-col h-full">
                   {uniqueTags.length > 0 && (
                     <div className="mb-2 mt-1">
-                      <div className="text-xs font-semibold text-gray-600 mb-2">Filter by Tags</div>
+                      <div className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">Filter by Tags</div>
                       <div className="flex flex-wrap gap-1 overflow-y-auto">
                         <Button
                           variant={!selectedTag ? "default" : "outline"}
@@ -1119,17 +1119,17 @@ export default function DatabaseQueryApp() {
               </CardContent>
             </Card>
 
-            <Card className="h-[245px] bg-white shadow-lg">
-              <CardHeader className="border-b border-gray-200 py-2">
+            <Card className="h-[245px] bg-white dark:bg-gray-800 shadow-lg">
+              <CardHeader className="border-b border-gray-200 dark:border-gray-700 py-2">
                 <div className="flex justify-between items-center">
-                  <h2 className="text-lg font-semibold text-gray-800">
+                  <h2 className="text-lg font-semibold">
                     History
                   </h2>
                   <Button
                     onClick={handleNewConversation}
                     variant="outline"
                     size="sm"
-                    className="text-blue-600 border-blue-600 hover:bg-blue-50 px-2 py-1 text-xs"
+                    className="text-blue-600 dark:text-blue-400 border-blue-600 dark:border-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900 px-2 py-1 text-xs"
                   >
                     New Chat
                   </Button>
@@ -1222,7 +1222,7 @@ export default function DatabaseQueryApp() {
           </div>
 
           <div className="flex-1 flex flex-col h-[calc(100vh-120px)]">
-            <Card className="flex-1 flex flex-col bg-white shadow-lg">
+            <Card className="flex-1 flex flex-col bg-white dark:bg-gray-800 shadow-lg">
               <CardContent className="flex-1 overflow-hidden p-4 relative">
                 <ScrollArea className="h-full pr-4">
                   <div className="space-y-4 h-[calc(80vh-65px)]">
@@ -1240,7 +1240,7 @@ export default function DatabaseQueryApp() {
                   </Button>
                 </ScrollArea>
               </CardContent>
-              <CardContent className="p-3 border-t border-gray-200 bg-gray-50 border-t-gray-200 rounded-b-lg">
+              <CardContent className="p-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900 border-t-gray-200 dark:border-t-gray-700 rounded-b-lg">
                 <div className="flex space-x-2">
                   <Textarea
                     value={inputMessage}
@@ -1316,6 +1316,6 @@ export default function DatabaseQueryApp() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </Box>
   );
 }
