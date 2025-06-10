@@ -5,7 +5,7 @@ import { Providers } from '@/components/Providers';
 import Link from 'next/link';
 import { inter } from "../app/fonts";
 import Image from "next/image";
-import { Home, Settings, HelpCircle } from 'lucide-react';
+import { Home, Settings, HelpCircle, Sun, Moon } from 'lucide-react';
 import "@radix-ui/themes/styles.css";
 import "@/app/globals.css";
 import packageJson from "../package.json";
@@ -20,42 +20,66 @@ export default function LayoutContent({
   children: React.ReactNode;
 }) {
   const [showAbout, setShowAbout] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
 
   useEffect(() => {
+    // Check for system preference or saved preference
+    const savedTheme = localStorage.getItem('theme') as 'light' | 'dark' | null;
+    const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    
+    if (savedTheme) {
+      setTheme(savedTheme);
+    } else if (systemPrefersDark) {
+      setTheme('dark');
+    }
+
     window.showAbout = () => setShowAbout(true);
   }, []);
 
+  const toggleTheme = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    localStorage.setItem('theme', newTheme);
+  };
+
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${inter.variable} font-sans`}>
+      <body className={`${inter.variable} font-sans`} data-theme={theme}>
         <Providers>
-          <Theme>
-            <nav className="bg-gray-100 text-black p-2">
+          <Theme appearance={theme} accentColor="gray" grayColor="gray" scaling="100%" radius="medium">
+            <nav className="bg-card border-b border-border text-card-foreground p-2 shadow-sm">
               <div className="container mx-auto flex items-center justify-between">
                 <div className="flex items-center space-x-4">
                   <Link href="/" className="hover:opacity-80 transition-opacity">
                     <Image width={100} height={50} src="/logo.png" alt="Query Craft" />
                   </Link>
-                  <span className="text-sm text-gray-500 font-bold">V{packageJson.version}</span>
+                  <span className="text-sm text-gray-500 dark:text-gray-400 font-bold">V{packageJson.version}</span>
                 </div>
                 <div className="flex items-center space-x-1 mr-2">
                   <Link 
                     href="/" 
-                    className="hover:text-blue-100 flex items-center px-3 py-2 rounded-md transition-colors hover:bg-gray-700"
+                    className="hover:text-accent flex items-center px-3 py-2 rounded-md transition-colors hover:bg-accent/40 dark:hover:bg-accent/20"
                   >
                     <Home className="h-5 w-5 m-1" />
                   </Link>
                   <Link 
                     href="/settings" 
-                    className="hover:text-blue-100 flex items-center px-3 py-2 rounded-md transition-colors hover:bg-gray-700"
+                    className="hover:text-accent flex items-center px-3 py-2 rounded-md transition-colors hover:bg-accent/40 dark:hover:bg-accent/20"
                   >
                     <Settings className="h-5 w-5 m-1" />
                   </Link>
                   <button
                     onClick={() => setShowAbout(true)}
-                    className="hover:text-blue-100 flex items-center px-3 py-2 rounded-md transition-colors hover:bg-gray-700"
+                    className="hover:text-accent flex items-center px-3 py-2 rounded-md transition-colors hover:bg-accent/40 dark:hover:bg-accent/20"
                   >
                     <HelpCircle className="h-5 w-5 m-1" />
+                  </button>
+                  <button
+                    onClick={toggleTheme}
+                    className="hover:text-accent flex items-center px-3 py-2 rounded-md transition-colors hover:bg-accent/40 dark:hover:bg-accent/20"
+                    aria-label="Toggle theme"
+                  >
+                    {theme === 'light' ? <Moon className="h-5 w-5 m-1" /> : <Sun className="h-5 w-5 m-1" />}
                   </button>
                 </div>
               </div>

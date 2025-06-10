@@ -1,17 +1,25 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useSession, signIn } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Textarea } from '@/components/ui/textarea';
-import { Loader2, User, Bot, Share2, Play, Copy, Edit, FileText, Check } from 'lucide-react';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { useToast } from '@/components/ui/use-toast';
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { 
+  Tooltip, 
+  TooltipContent, 
+  TooltipProvider, 
+  TooltipTrigger 
+} from "@/components/ui/tooltip";
+import { useToast } from "@/components/ui/use-toast";
+import { Textarea } from "@/components/ui/textarea";
+import { Copy, Bot, User, Play, ArrowDownCircle, Edit, Loader2, Check, FileText, Ban } from "lucide-react";
 import ReactMarkdown from 'react-markdown';
+import { format, parseISO, addHours } from 'date-fns';
+import SqlResultPanel from '@/components/SqlResultPanel';
+import ResizableSplitter from '@/components/ResizableSplitter';
 
 interface SharedMessage {
   id: number;
@@ -35,7 +43,25 @@ export default function SharedMessagePage({ params }: { params: { token: string 
   const [isSaving, setIsSaving] = useState(false);
   const [editingSqlId, setEditingSqlId] = useState<number | null>(null);
   const [copySuccessId, setCopySuccessId] = useState<number | null>(null);
-  const [loadingOperation, setLoadingOperation] = useState<{ type: 'explain' | 'run' | null; messageId: number | null }>({ type: null, messageId: null });
+  const [loadingOperation, setLoadingOperation] = useState<{ type: string | null, messageId: number | null }>({ 
+    type: null, 
+    messageId: null 
+  });
+  
+  // State for SQL result panel
+  const [showResultPanel, setShowResultPanel] = useState(false);
+  const [activeQueryResult, setActiveQueryResult] = useState<{
+    result: any;
+    hasError: boolean;
+  } | null>(null);
+  
+  // Panel splitting state
+  const [panelSplit, setPanelSplit] = useState(50); // Default to 50% split
+  
+  // Streaming state
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [stopStreaming, setStopStreaming] = useState(false);
+  const stopStreamingRef = useRef(false);
 
   useEffect(() => {
     const fetchMessage = async () => {
@@ -126,6 +152,10 @@ export default function SharedMessagePage({ params }: { params: { token: string 
     }
 
     setLoadingOperation({ type: 'explain', messageId: message?.id || null });
+    setIsStreaming(true);
+    setStopStreaming(false);
+    stopStreamingRef.current = false;
+    
     try {
       const response = await fetch('/api/run-sql', {
         method: 'POST',
@@ -143,8 +173,72 @@ export default function SharedMessagePage({ params }: { params: { token: string 
         throw new Error(data.message || 'Failed to explain query');
       }
 
-      const data = await response.json();
-      setMessage(prev => prev ? { ...prev, result: data.result } : null);
+      // Streaming response handling
+      if (response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let done = false;
+        let buffer = "";
+        let rows: any[] = [];
+
+        while (!done) {
+          if (stopStreamingRef.current) {
+            reader.cancel();
+            break;
+          }
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+          if (value) {
+            buffer += decoder.decode(value, { stream: !done });
+            let lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+            for (const line of lines) {
+              if (line.trim()) {
+                const row = JSON.parse(line);
+                rows.push(row);
+                setMessage(prev => prev ? { ...prev, result: [...rows] } : null);
+                
+                // Also update the active query result for the panel
+                setActiveQueryResult({
+                  result: [...rows],
+                  hasError: false
+                });
+                if (!showResultPanel) {
+                  setShowResultPanel(true);
+                }
+              }
+            }
+          }
+          if (done) {
+            break;
+          }
+        }
+        
+        // Handle any remaining buffered line
+        if (buffer.trim()) {
+          const row = JSON.parse(buffer);
+          rows.push(row);
+          setMessage(prev => prev ? { ...prev, result: [...rows] } : null);
+          
+          // Update the panel result one last time
+          setActiveQueryResult({
+            result: [...rows],
+            hasError: false
+          });
+          setShowResultPanel(true);
+        }
+      } else {
+        // fallback for non-streaming
+        const data = await response.json();
+        setMessage(prev => prev ? { ...prev, result: data.result } : null);
+        
+        // Show result in panel
+        setActiveQueryResult({
+          result: data.result,
+          hasError: false
+        });
+        setShowResultPanel(true);
+      }
     } catch (error) {
       console.error('Error explaining query:', error);
       toast({
@@ -152,8 +246,18 @@ export default function SharedMessagePage({ params }: { params: { token: string 
         description: error instanceof Error ? error.message : "Failed to explain query",
         variant: "destructive",
       });
+      
+      // Show error in panel
+      setActiveQueryResult({
+        result: [{ error: error instanceof Error ? error.message : "Failed to explain query" }],
+        hasError: true
+      });
+      setShowResultPanel(true);
     } finally {
       setLoadingOperation({ type: null, messageId: null });
+      setIsStreaming(false);
+      setStopStreaming(false);
+      stopStreamingRef.current = false;
     }
   };
 
@@ -168,6 +272,10 @@ export default function SharedMessagePage({ params }: { params: { token: string 
     }
 
     setLoadingOperation({ type: 'run', messageId: message?.id || null });
+    setIsStreaming(true);
+    setStopStreaming(false);
+    stopStreamingRef.current = false;
+    
     try {
       const response = await fetch('/api/run-sql', {
         method: 'POST',
@@ -185,8 +293,72 @@ export default function SharedMessagePage({ params }: { params: { token: string 
         throw new Error(data.message || 'Failed to run query');
       }
 
-      const data = await response.json();
-      setMessage(prev => prev ? { ...prev, result: data.result } : null);
+      // Streaming response handling
+      if (response.body) {
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let done = false;
+        let buffer = "";
+        let rows: any[] = [];
+
+        while (!done) {
+          if (stopStreamingRef.current) {
+            reader.cancel();
+            break;
+          }
+          const { value, done: readerDone } = await reader.read();
+          done = readerDone;
+          if (value) {
+            buffer += decoder.decode(value, { stream: !done });
+            let lines = buffer.split("\n");
+            buffer = lines.pop() || "";
+            for (const line of lines) {
+              if (line.trim()) {
+                const row = JSON.parse(line);
+                rows.push(row);
+                setMessage(prev => prev ? { ...prev, result: [...rows] } : null);
+                
+                // Also update the active query result for the panel
+                setActiveQueryResult({
+                  result: [...rows],
+                  hasError: false
+                });
+                if (!showResultPanel) {
+                  setShowResultPanel(true);
+                }
+              }
+            }
+          }
+          if (done) {
+            break;
+          }
+        }
+        
+        // Handle any remaining buffered line
+        if (buffer.trim()) {
+          const row = JSON.parse(buffer);
+          rows.push(row);
+          setMessage(prev => prev ? { ...prev, result: [...rows] } : null);
+          
+          // Update the panel result one last time
+          setActiveQueryResult({
+            result: [...rows],
+            hasError: false
+          });
+          setShowResultPanel(true);
+        }
+      } else {
+        // fallback for non-streaming
+        const data = await response.json();
+        setMessage(prev => prev ? { ...prev, result: data.result } : null);
+        
+        // Show result in panel
+        setActiveQueryResult({
+          result: data.result,
+          hasError: false
+        });
+        setShowResultPanel(true);
+      }
     } catch (error) {
       console.error('Error running query:', error);
       toast({
@@ -194,22 +366,57 @@ export default function SharedMessagePage({ params }: { params: { token: string 
         description: error instanceof Error ? error.message : "Failed to run query",
         variant: "destructive",
       });
+      
+      // Show error in panel
+      setActiveQueryResult({
+        result: [{ error: error instanceof Error ? error.message : "Failed to run query" }],
+        hasError: true
+      });
+      setShowResultPanel(true);
     } finally {
       setLoadingOperation({ type: null, messageId: null });
+      setIsStreaming(false);
+      setStopStreaming(false);
+      stopStreamingRef.current = false;
     }
   };
 
   const formatJapanTime = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString('ja-JP', {
-      timeZone: 'Asia/Tokyo',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
+    // Convert UTC time to JST (UTC+9)
+    const date = parseISO(timestamp);
+    const jstDate = addHours(date, 9);
+    return format(jstDate, 'yyyy/MM/dd HH:mm:ss');
   };
+
+  // Function to close the result panel
+  const closeResultPanel = () => {
+    setShowResultPanel(false);
+    setActiveQueryResult(null);
+  };
+
+  // Function to view result in panel
+  const viewResultInPanel = (result: any, hasError: boolean) => {
+    setActiveQueryResult({
+      result,
+      hasError
+    });
+    setShowResultPanel(true);
+  };
+  
+  // Function to handle resizing between chat and SQL panels
+  const handlePanelResize = (newPosition: number) => {
+    setPanelSplit(newPosition);
+    // Save preference to localStorage for persistence
+    localStorage.setItem('sharedPanelSplitPosition', newPosition.toString());
+  };
+  
+  // Load saved panel split preference on mount
+  useEffect(() => {
+    const savedSplit = localStorage.getItem('sharedPanelSplitPosition');
+    if (savedSplit) {
+      setPanelSplit(parseFloat(savedSplit));
+    }
+  }, []);
 
   const renderContent = (content: string) => {
     const parts = content.split(/(```sql[\s\S]*?```)/);
@@ -384,39 +591,6 @@ export default function SharedMessagePage({ params }: { params: { token: string 
           </Alert>
         );
       }
-      return (
-        <table className="w-full table-auto">
-          <thead>
-            <tr className="bg-gray-50">
-              {Object.keys(message.result[0]).map((key) => (
-                <th
-                  key={key}
-                  className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"
-                >
-                  {key}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {message.result.map((row, index) => (
-              <tr
-                key={index}
-                className={index % 2 === 0 ? "bg-white" : "bg-gray-50"}
-              >
-                {Object.values(row).map((value, idx) => (
-                  <td
-                    key={idx}
-                    className="px-4 py-2 whitespace-nowrap text-sm text-gray-900"
-                  >
-                    {String(value)}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      );
     }
 
     if ("affectedRows" in message.result) {
@@ -485,42 +659,121 @@ export default function SharedMessagePage({ params }: { params: { token: string 
             </div>
           </div>
 
-          <div className="bg-white rounded-lg shadow-lg p-6">
-            <div className="flex items-start space-x-4">
-              <Avatar className="w-8 h-8">
-                <AvatarFallback
-                  className={
-                    message.sender === "user" ? "bg-blue-100" : "bg-gray-300"
-                  }
-                >
-                  {message.sender === "user" ? (
-                    <User className="w-5 h-5 text-blue-600" />
-                  ) : (
-                    <Bot className="w-5 h-5 text-gray-600" />
-                  )}
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex-1">
-                {message.error ? (
-                  <Alert variant="destructive" className="mb-4">
-                    <AlertTitle>Error</AlertTitle>
-                    <AlertDescription>{message.content}</AlertDescription>
-                  </Alert>
-                ) : (
-                  <div className="prose dark:prose-invert max-w-none">
-                    {renderContent(message.content)}
+          {/* Resizable container for message and SQL panels */}
+          <div id="resizable-container" className="flex h-[calc(100vh-200px)] overflow-hidden">
+            {/* Message panel */}
+            <div 
+              style={{ 
+                width: showResultPanel ? `${panelSplit}%` : '100%',
+                minWidth: showResultPanel ? '20%' : '100%',
+                maxWidth: showResultPanel ? '80%' : '100%',
+                transition: showResultPanel ? 'none' : 'width 0.2s ease-in-out'
+              }}
+              className="h-full"
+            >
+              <div className="bg-white rounded-lg shadow-lg p-6 h-full overflow-auto">
+                <div className="flex flex-col space-y-6">
+                  <div className="flex items-start">
+                    {message.sender === "user" && session?.user ? (
+                      <div className="flex items-center space-x-2 min-w-[120px]">
+                        <Avatar className="w-8 h-8">
+                          {session.user.image ? (
+                            <img
+                              src={session.user.image}
+                              alt={session.user.name || 'User avatar'}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <AvatarFallback className="bg-blue-100">
+                                <User className="w-5 h-5 text-blue-600" />
+                            </AvatarFallback>
+                          )}
+                        </Avatar>
+                      </div>
+                    ) : (
+                      <div className="flex items-center space-x-2 min-w-[120px]">
+                        <Avatar className="w-8 h-8">
+                          <AvatarFallback className="bg-gray-300">
+                            {message.sender === "user" ? (
+                              <User className="w-5 h-5 text-blue-600" />
+                            ) : (
+                              <Bot className="w-5 h-5 text-gray-600" />
+                            )}
+                          </AvatarFallback>
+                        </Avatar>
+                      </div>
+                    )}
+                    <div className="flex-1 ml-4">
+                      {message.error ? (
+                        <Alert variant="destructive" className="mb-4">
+                          <AlertTitle>Error</AlertTitle>
+                          <AlertDescription>{message.content}</AlertDescription>
+                        </Alert>
+                      ) : (
+                        <div className="prose dark:prose-invert max-w-none">
+                          {renderContent(message.content)}
+                        </div>
+                      )}
+                      {message.result && (
+                        <div className="mt-4 bg-white rounded-md shadow-inner overflow-x-auto">
+                          {renderResult()}
+                        </div>
+                      )}
+                      <p className="text-xs text-gray-500 mt-2">
+                        {formatJapanTime(message.timestamp)}
+                      </p>
+                      
+                      {isStreaming && (
+                        <div className="mt-4 text-right">
+                          <Button
+                            onClick={() => {
+                              setStopStreaming(true);
+                              stopStreamingRef.current = true;
+                            }}
+                            variant="destructive"
+                            size="sm"
+                            className="mt-2"
+                          >
+                            <Ban className="w-3 h-3 mr-1" />
+                            Stop Streaming
+                          </Button>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-                {message.result && (
-                  <div className="mt-4 bg-white rounded-md shadow-inner overflow-x-auto">
-                    {renderResult()}
-                  </div>
-                )}
-                <p className="text-xs text-gray-500 mt-2">
-                  {formatJapanTime(message.timestamp)}
-                </p>
+                </div>
               </div>
             </div>
+
+            {/* Resizable splitter - only shown when SQL result panel is active */}
+            {showResultPanel && (
+              <ResizableSplitter
+                onResize={handlePanelResize}
+                initialPosition={panelSplit}
+                minLeftWidth={20}
+                minRightWidth={20}
+                className="h-full flex-shrink-0"
+              />
+            )}
+
+            {/* SQL Result panel */}
+            {showResultPanel && (
+              <div 
+                style={{ 
+                  width: `${100 - panelSplit}%`,
+                  minWidth: '20%',
+                  maxWidth: '80%',
+                  transition: 'none'
+                }}
+                className="h-full flex-shrink-0"
+              >
+                <SqlResultPanel 
+                  results={activeQueryResult?.result} 
+                  hasError={activeQueryResult?.hasError || false}
+                  onClose={closeResultPanel} 
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>

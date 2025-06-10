@@ -39,7 +39,10 @@ import {
   Loader2,
   Share2,
   Ban,
-  ArrowDown
+  ArrowDown,
+  X,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { format, parseISO, addHours } from "date-fns";
 import ReactMarkdown from 'react-markdown';
@@ -50,9 +53,11 @@ import {
   useChatProviderConfig
 } from "@/app/context/ChatProviderConfigContext";
 import { useToast } from "@/components/ui/use-toast";
-
 import Image from "next/image";
 import {AI_PROVIDER_ERROR} from "@/constants/error";
+import { Box, Flex, Text } from "@radix-ui/themes";
+import SqlResultPanel from './SqlResultPanel';
+import ResizableSplitter from './ResizableSplitter';
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 const ENABLE_OAUTH = process.env.NEXT_PUBLIC_ENABLE_OAUTH;
@@ -138,6 +143,17 @@ export default function DatabaseQueryApp() {
   const prevMessagesRef = useRef<Message[]>([]);
   const [editingTitleId, setEditingTitleId] = useState<number | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
+  const [activeQueryResult, setActiveQueryResult] = useState<{
+    result: QueryResult[] | QueryResponse | undefined;
+    hasError: boolean;
+  } | null>(null);
+  const [showResultPanel, setShowResultPanel] = useState(false);
+  const [showLeftPanel, setShowLeftPanel] = useState(true);
+  const [screenSize, setScreenSize] = useState({
+    isLarge: false,  // >= 1280px (xl breakpoint)
+    isMedium: false  // >= 768px (md breakpoint)
+  });
+  const [panelSplit, setPanelSplit] = useState<number>(50); // Default 50% split
 
   useEffect(() => {
     checkSettings();
@@ -473,13 +489,21 @@ export default function DatabaseQueryApp() {
                             : msg
                     )
                 );
+                // Also update the active query result for the panel
+                setActiveQueryResult({
+                  result: [...rows],
+                  hasError: false
+                });
+                if (!showResultPanel) {
+                  setShowResultPanel(true);
+                  setShowLeftPanel(false);
+                }
               }
             }
           }
-          // break if done
-            if (done) {
-                break;
-            }
+          if (done) {
+            break;
+          }
         }
         // Handle any remaining buffered line
         if (buffer.trim()) {
@@ -492,6 +516,14 @@ export default function DatabaseQueryApp() {
                       : msg
               )
           );
+          // Update the panel result one last time
+          setActiveQueryResult({
+            result: [...rows],
+            hasError: false
+          });
+          // Make sure we show the result panel and always hide the left panel
+          setShowResultPanel(true);
+          setShowLeftPanel(false);
         }
       } else {
         // fallback for non-streaming
@@ -509,6 +541,12 @@ export default function DatabaseQueryApp() {
                 msg.id === messageId ? { ...msg, result: data.result } : msg
             )
         );
+        setActiveQueryResult({
+          result: data.result,
+          hasError: false
+        });
+        setShowResultPanel(true);
+        setShowLeftPanel(false); // Always hide left panel when showing results
       }
     } catch (error) {
       console.error("Error running SQL:", error);
@@ -521,6 +559,12 @@ export default function DatabaseQueryApp() {
             : msg
         )
       );
+      setActiveQueryResult({
+        result: [{ error: errorMessage }],
+        hasError: true
+      });
+      setShowResultPanel(true);
+      setShowLeftPanel(false); // Always hide left panel on error results
     } finally {
       setIsStreaming(false);
       setStopStreaming(false);
@@ -634,7 +678,7 @@ export default function DatabaseQueryApp() {
               href={shareUrl} 
               target="_blank" 
               rel="noopener noreferrer"
-              className="text-sm text-blue-500 hover:underline break-all"
+              className="text-sm text-primary hover:underline break-all"
             >
               {shareUrl}
             </a>
@@ -665,7 +709,7 @@ export default function DatabaseQueryApp() {
           const currentSql = message.editedSql || sql;
 
           return (
-            <div key={index} className="my-3 bg-blue-100 text-blue-900 p-3 rounded-lg">
+            <div key={index} className="my-3 bg-accent/10 dark:bg-accent/20 text-accent-foreground dark:text-accent-foreground p-3 rounded-lg">
               <div className="flex justify-between items-center mb-2">
                 <p className="font-semibold">Generated SQL:</p>
                 <div className="flex gap-2">
@@ -724,7 +768,8 @@ export default function DatabaseQueryApp() {
                 <Button
                   onClick={() => explainSQL(currentSql, messageId)}
                   size="sm"
-                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  variant="default"
+                  className="bg-primary hover:bg-primary/80 text-primary-foreground"
                   disabled={loadingOperation.type === 'explain' && loadingOperation.messageId === messageId}
                 >
                   {loadingOperation.type === 'explain' && loadingOperation.messageId === messageId ? (
@@ -737,7 +782,8 @@ export default function DatabaseQueryApp() {
                 <Button
                   onClick={() => runSQL(currentSql, messageId)}
                   size="sm"
-                  className="bg-green-600 hover:bg-green-700 text-white"
+                  variant="default"
+                  className="bg-primary hover:bg-primary/80 text-primary-foreground"
                   disabled={loadingOperation.type === 'run' && loadingOperation.messageId === messageId}
                 >
                   {loadingOperation.type === 'run' && loadingOperation.messageId === messageId ? (
@@ -776,72 +822,38 @@ export default function DatabaseQueryApp() {
     };
 
     const messageClass = message.sender === "user"
-            ? "bg-blue-50 text-gray-800"
-            : "bg-gray-100 text-gray-800";
-    const errorClass = "bg-red-100 text-red-900"
+            ? "bg-primary/10 dark:bg-primary/20 text-foreground dark:text-foreground"
+            : "bg-secondary dark:bg-secondary text-foreground dark:text-foreground";
+    const errorClass = "bg-red-100 dark:bg-red-900 text-red-900 dark:text-red-100"
 
     const renderResult = () => {
       if (!message.result) return null;
 
       return (
-          <div className="max-h-[300px] overflow-auto">
-            {Array.isArray(message.result) ? (
-                message.result.length === 0 ? (
-                    <Alert>
-                      <AlertTitle>No Results</AlertTitle>
-                      <AlertDescription>
-                        The query returned no results.
-                      </AlertDescription>
-                    </Alert>
-                ) : (
-                    <table className="w-full table-auto min-w-max">
-                      <thead>
-                      <tr className="bg-gray-50">
-                        {Object.keys(message.result[0]).map((key) => (
-                            <th
-                                key={key}
-                                className={`px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap ${key === 'error' ? errorClass : ""}`}
-                            >
-                              {key}
-                            </th>
-                        ))}
-                      </tr>
-                      </thead>
-                      <tbody>
-                      {message.result.map((row, index) => (
-                          <tr
-                              key={index}
-                              className={`${
-                                  row.error ? errorClass : index % 2 === 0 ? "bg-white" : "bg-gray-50"
-                              }`}
-                          >
-                            {Object.values(row).map((value, idx) => (
-                                <td
-                                    key={idx}
-                                    className="px-4 py-2 whitespace-nowrap text-sm text-gray-900"
-                                >
-                                  {String(value)}
-                                </td>
-                            ))}
-                          </tr>
-                      ))}
-                      </tbody>
-                    </table>
-                )
-            ) : "affectedRows" in message.result ? (
-                <Alert>
-                  <AlertTitle>Query Executed Successfully</AlertTitle>
-                  <AlertDescription>
-                    Affected rows: {message.result.affectedRows}
-                  </AlertDescription>
-                </Alert>
-            ) : (
-                <Alert variant="destructive">
-                  <AlertTitle>Error</AlertTitle>
-                  <AlertDescription>{message.result.error}</AlertDescription>
-                </Alert>
-            )}
-          </div>
+        <div className="max-h-[300px] overflow-auto">
+          {Array.isArray(message.result) ? (
+            message.result.length === 0 && (
+              <Alert>
+                <AlertTitle>No Results</AlertTitle>
+                <AlertDescription>
+                  The query returned no results.
+                </AlertDescription>
+              </Alert>
+            )
+          ) : "affectedRows" in message.result ? (
+            <Alert>
+              <AlertTitle>Query Executed Successfully</AlertTitle>
+              <AlertDescription>
+                Affected rows: {message.result.affectedRows}
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <Alert variant="destructive">
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{message.result.error}</AlertDescription>
+            </Alert>
+          )}
+        </div>
       );
     }
 
@@ -870,25 +882,36 @@ export default function DatabaseQueryApp() {
             message.sender === "user" ? "flex-row-reverse space-x-reverse" : ""
           }`}
         >
-          <Avatar className="w-8 h-8">
-            <AvatarFallback
-              className={
-                message.sender === "user" ? "bg-blue-100" : "bg-gray-300"
-              }
-            >
-              {message.sender === "user" ? (
-                <User className="w-5 h-5 text-blue-600" />
-              ) : (
-                // <Bot className="w-5 h-5 text-gray-600" />
-                  <Image
-                      src={imagePath} // Path to your custom icon in the public folder
-                      alt={`${providerConfig.selectedProvider} Icon`}
-                      width={20} // Adjust the width as needed
-                      height={20} // Adjust the height as needed
+          {message.sender === "user" ? (
+            <div className="flex items-center space-x-2">
+              <Avatar className="w-8 h-8">
+                {session?.user?.image ? (
+                  <img
+                    src={session.user.image}
+                    alt={session.user.name || 'User avatar'}
+                    className="w-full h-full object-cover"
                   />
-              )}
-            </AvatarFallback>
-          </Avatar>
+                ) : (
+                  <AvatarFallback className="bg-primary/20">
+                      <User className="w-5 h-5 text-primary" />
+                  </AvatarFallback>
+                )}
+              </Avatar>
+            </div>
+          ) : (
+            <div className="flex items-center space-x-2">
+              <Avatar className="w-8 h-8">
+                <AvatarFallback className="bg-muted">
+                  <Image
+                    src={imagePath}
+                    alt={`${providerConfig.selectedProvider} Icon`}
+                    width={20}
+                    height={20}
+                  />
+                </AvatarFallback>
+              </Avatar>
+            </div>
+          )}
           <div className={`rounded-lg p-3 ${isAIProviderError? errorClass : messageClass} max-w-[600px] shadow-md`}>
             {isAIProviderError ? (
               <Alert variant="destructive">
@@ -899,7 +922,7 @@ export default function DatabaseQueryApp() {
               renderContent(message.content)
             )}
             {message.result && (
-              <div className="mt-3 bg-white rounded-md shadow-inner overflow-x-auto">
+              <div className="mt-3 bg-white dark:bg-gray-800 rounded-md shadow-inner overflow-x-auto">
                 {renderResult()}
               </div>
             )}
@@ -995,6 +1018,74 @@ export default function DatabaseQueryApp() {
     }
   };
 
+  // Function to toggle the left panel visibility (for mobile/narrow screens)
+  const toggleLeftPanel = () => {
+    setShowLeftPanel(prev => !prev);
+  };
+
+  // Function to close the result panel
+  const closeResultPanel = () => {
+    setShowResultPanel(false);
+    setShowLeftPanel(true);
+    setActiveQueryResult(null);
+  };
+
+  // Modify the viewResultInPanel function to handle left panel visibility
+  const viewResultInPanel = (result: QueryResult[] | QueryResponse, hasError: boolean) => {
+    setActiveQueryResult({
+      result,
+      hasError
+    });
+    setShowResultPanel(true);
+    // Always hide left panel when result panel is shown
+    setShowLeftPanel(false);
+  };
+
+  // Add useEffect to handle screen size changes and SQL panel interaction
+  useEffect(() => {
+    const handleResize = () => {
+      const isLarge = window.innerWidth >= 1280;
+      const isMedium = window.innerWidth >= 768 && window.innerWidth < 1280;
+      
+      setScreenSize({
+        isLarge,
+        isMedium
+      });
+      
+      // When result panel is shown, always hide left panel regardless of screen size
+      if (showResultPanel) {
+        setShowLeftPanel(false);
+      }
+      // On large screens (xl and above), show left panel when result panel is not shown
+      else if (isLarge) {
+        setShowLeftPanel(true);
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    // Run once on mount and when result panel visibility changes
+    handleResize();
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [showResultPanel]); // Re-run when showResultPanel changes
+
+  // Function to handle resizing between chat and SQL panels
+  const handlePanelResize = (newPosition: number) => {
+    setPanelSplit(newPosition);
+    // Save preference to localStorage for persistence
+    localStorage.setItem('panelSplitPosition', newPosition.toString());
+  };
+
+  // Load saved panel split preference on mount
+  useEffect(() => {
+    const savedSplit = localStorage.getItem('panelSplitPosition');
+    if (savedSplit) {
+      setPanelSplit(parseFloat(savedSplit));
+    }
+  }, []);
+
   if (status === "loading") {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -1008,12 +1099,23 @@ export default function DatabaseQueryApp() {
   }
 
   return (
-    <div className="bg-gray-100 min-h-screen">
+    <Box className="min-h-screen">
       <div className="container mx-auto py-2 px-2">
-        <div className="flex justify-between items-center border-b border-gray-200 pb-2">
-        <h1 className="text-2xl items-center font-bold p-2 text-gray-800">
-          Chat
-        </h1>
+        <div className="flex justify-between items-center pb-2">
+          <div className="flex items-center">
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={toggleLeftPanel}
+              className="mr-2 "
+              aria-label={showLeftPanel ? "Hide sidebar" : "Show sidebar"}
+            >
+              {showLeftPanel ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+            </Button>
+            <h1 className="text-2xl items-center font-bold p-2">
+              Chat
+            </h1>
+          </div>
           <div className="flex items-center space-x-4">
             {showAuth && (
               session ? (
@@ -1033,7 +1135,7 @@ export default function DatabaseQueryApp() {
                   </Avatar>
                   <div className="flex flex-col">
                     <span className="text-sm font-medium">{session.user?.name}</span>
-                    <span className="text-xs text-gray-500">{session.user?.email}</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400">{session.user?.email}</span>
                   </div>
                   <Button
                     variant="outline"
@@ -1056,244 +1158,300 @@ export default function DatabaseQueryApp() {
           </div>
         </div>
 
-        <div className="flex space-x-6">
-          <div className="w-1/4 min-w-[250px]">
-            <Card className="mb-2 h-[calc(100vh-350px)] flex flex-col">
-              <CardHeader className="border-b border-gray-200 pb-2">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-xl font-semibold text-gray-800">
-                    Databases
-                  </h2>
-                </div>
-              </CardHeader>
-              <CardContent className="flex-1 overflow-hidden">
-                <div className="flex flex-col h-full">
-                  {uniqueTags.length > 0 && (
-                    <div className="mb-2 mt-1">
-                      <div className="text-xs font-semibold text-gray-600 mb-2">Filter by Tags</div>
-                      <div className="flex flex-wrap gap-1 overflow-y-auto">
-                        <Button
-                          variant={!selectedTag ? "default" : "outline"}
-                          size="sm"
-                          className="px-2 py-1 text-xs"
-                          onClick={() => handleTagSelect(null)}
-                        >
-                          All
-                        </Button>
-                        {uniqueTags.map(tag => (
+        <div className="flex space-x-0 lg:space-x-4 relative">
+          {/* Left panel (databases and history) - hidden when SQL result panel is */}
+          {showLeftPanel && (
+            <div className="w-full lg:w-1/5 lg:min-w-[220px] xl:min-w-[250px] absolute lg:relative z-10 bg-white dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent">
+              <Card className="mb-2 h-[calc(100vh-350px)] flex flex-col bg-card border border-border shadow-md">
+                <CardHeader className="border-b border-border py-2">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-lg font-semibold">
+                      Databases
+                    </h2>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="flex flex-col h-full">
+                    {uniqueTags.length > 0 && (
+                      <div className="mb-2 mt-2 px-2">
+                        <div className="text-xs font-semibold text-muted-foreground dark:text-muted-foreground mb-2">Filter by Tags</div>
+                        <div className="flex flex-wrap gap-1 overflow-y-auto">
                           <Button
-                            key={tag}
-                            variant={selectedTag === tag ? "default" : "outline"}
+                            variant={!selectedTag ? "default" : "outline"}
                             size="sm"
-                            className="px-2 py-1 text-xs"
-                            onClick={() => handleTagSelect(tag)}
+                            className={`px-2 py-1 text-xs ${
+                              !selectedTag ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "hover:border-primary/50 dark:hover:border-primary/70"
+                            }`}
+                            onClick={() => handleTagSelect(null)}
                           >
-                            {tag}
+                            All
                           </Button>
-                        ))}
+                          {uniqueTags.map(tag => (
+                            <Button
+                              key={tag}
+                              variant={selectedTag === tag ? "default" : "outline"}
+                              size="sm"
+                              className={`px-2 py-1 text-xs ${
+                                selectedTag === tag ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "hover:border-primary/50 dark:hover:border-primary/70"
+                              }`}
+                              onClick={() => handleTagSelect(tag)}
+                            >
+                              {tag}
+                            </Button>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  
-                  <ScrollArea className="max-h-full flex-grow pt-1">
-                    <ul className="space-y-1">
-                      {filteredConnections.map((connection) => (
-                        <li key={connection.id}>
-                          <Button
-                            variant={
-                              selectedConnectionId === connection.id
-                                ? "default"
-                                : "outline"
-                            }
-                            className="w-full justify-start px-2 py-1 text-xs h-8"
+                    )}
+                    
+                    <ScrollArea className="flex-grow overflow-y-auto">
+                      <ul className="divide-y divide-border">
+                        {filteredConnections.map((connection) => (
+                          <li 
+                            key={connection.id}
+                            className={`list-item px-2 py-1 cursor-pointer flex items-center ${
+                              selectedConnectionId === connection.id 
+                              ? "selected font-medium text-foreground dark:text-foreground pl-1" 
+                              : "text-foreground dark:text-foreground"
+                            }`}
                             onClick={() => handleConnectionSelect(connection.id)}
                           >
-                            <Database className="mr-2 h-4 w-4" />
-                            {connection.projectName}
-                          </Button>
-                        </li>
-                      ))}
-                    </ul>
-                  </ScrollArea>
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card className="h-[245px] bg-white shadow-lg">
-              <CardHeader className="border-b border-gray-200 py-2">
-                <div className="flex justify-between items-center">
-                  <h2 className="text-lg font-semibold text-gray-800">
-                    History
-                  </h2>
-                  <Button
-                    onClick={handleNewConversation}
-                    variant="outline"
-                    size="sm"
-                    className="text-blue-600 border-blue-600 hover:bg-blue-50 px-2 py-1 text-xs"
-                  >
-                    New Chat
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <ScrollArea className="h-[140px] overflow-y-auto">
-                  <ul className="divide-y divide-gray-200">
-                    {selectedConnectionId &&
-                      currentConversation?.map((conversation) => (
-                          <li
-                            key={conversation.id}
-                            className={`px-2 py-1 cursor-pointer hover:bg-blue-50 transition-colors duration-150 text-xs flex items-center min-h-[32px] ${
-                              conversation.id === conversationId ? "bg-blue-100" : ""
-                            }`}
-                          >
-                            <div className="flex items-center justify-between w-full">
-                              {editingTitleId === conversation.id ? (
-                                <div className="flex-1 mr-1">
-                                  <Input
-                                    value={editingTitle}
-                                    onChange={(e) => setEditingTitle(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        handleTitleSave(conversation.id);
-                                      } else if (e.key === 'Escape') {
-                                        setEditingTitleId(null);
-                                        setEditingTitle("");
-                                      }
-                                    }}
-                                    className="h-6 text-xs px-1"
-                                    autoFocus
-                                  />
-                                </div>
-                              ) : (
-                                <div
-                                  className="flex-1 truncate"
-                                  onClick={() => handleConversationClick(conversation)}
-                                >
-                                  <p className="font-medium text-gray-800 truncate text-xs">
-                                    {conversation.title}
-                                  </p>
-                                </div>
-                              )}
-                              <div className="flex items-center space-x-1">
-                                {editingTitleId === conversation.id ? (
-                                  <>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => handleTitleSave(conversation.id)}
-                                      className="h-6 w-6"
-                                    >
-                                      <Check className="h-3 w-3" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={() => {
-                                        setEditingTitleId(null);
-                                        setEditingTitle("");
-                                      }}
-                                      className="h-6 w-6"
-                                    >
-                                      <RotateCcw className="h-3 w-3" />
-                                    </Button>
-                                  </>
-                                ) : (
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      handleTitleEdit(conversation);
-                                    }}
-                                    className="h-6 w-6 text-gray-500 hover:text-blue-600 hover:bg-blue-50"
-                                  >
-                                    <Pencil className="h-3 w-3" />
-                                  </Button>
-                                )}
-                              </div>
+                            <div className="flex items-center w-full">
+                              <Database className={`h-4 w-4 mr-2 ${
+                                selectedConnectionId === connection.id 
+                                ? "text-primary dark:text-primary" 
+                                : "text-muted-foreground dark:text-muted-foreground"
+                              }`} />
+                              <span className="text-xs font-medium truncate">{connection.projectName}</span>
                             </div>
                           </li>
-                        )
-                      )}
-                  </ul>
-                </ScrollArea>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="flex-1 flex flex-col h-[calc(100vh-120px)]">
-            <Card className="flex-1 flex flex-col bg-white shadow-lg">
-              <CardContent className="flex-1 overflow-hidden p-4 relative">
-                <ScrollArea className="h-full pr-4">
-                  <div className="space-y-4 h-[calc(80vh-65px)]">
-                    {messages.map(renderMessage)}
-                    <div ref={messagesEndRef} />
+                        ))}
+                      </ul>
+                    </ScrollArea>
                   </div>
-                  <Button
+                </CardContent>
+              </Card>
+
+              <Card className="h-[225px] flex flex-col bg-card border border-border shadow-md">
+                <CardHeader className="border-b border-border py-2">
+                  <div className="flex justify-between items-center">
+                    <h2 className="text-lg font-semibold">
+                      History
+                    </h2>
+                    <Button
+                      onClick={handleNewConversation}
                       variant="outline"
                       size="sm"
-                      onClick={scrollToBottom}
-                      aria-label="Scroll to Bottom"
-                      className="absolute bottom-0 right-4 z-10 shadow-lg"
-                  >
-                    <ArrowDown className="w-4 h-4 mr-1" />
-                  </Button>
-                </ScrollArea>
-              </CardContent>
-              <CardContent className="p-3 border-t border-gray-200 bg-gray-50 border-t-gray-200 rounded-b-lg">
-                <div className="flex space-x-2">
-                  <Textarea
-                    value={inputMessage}
-                    onChange={(e) => setInputMessage(e.target.value)}
-                    placeholder="Type your query..."
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        handleSendMessage();
-                      }
-                    }}
-                    className="flex-1 min-h-[30px] max-h-[100px] resize-y"
-                    disabled={!selectedConnectionId}
-                  />
-                  <div className="flex flex-col items-end">
-                  <Button
-                    onClick={handleSendMessage}
-                    disabled={isLoading || isStreaming || !selectedConnectionId}
-                    className="bg-blue-600 hover:bg-blue-700 text-white"
-                  >
-                    {isLoading ? (
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                    ) : (
-                      <Send className="w-4 h-4 mr-2" />
-                    )}
-                    Send
-                  </Button>
-                  {isStreaming && (
-                      <Button
-                          onClick={() => {
-                            setStopStreaming(true);
-                            stopStreamingRef.current = true;
-                          }}
-                          variant="destructive"
-                          className="mt-2"
-                          size="icon"
-                          aria-label="Stop Streaming"
-                      >
-                        <Ban className="w-3 h-3" />
-                      </Button>
-                  )}
+                      className="text-primary dark:text-primary border-primary dark:border-primary btn-hover-enhanced px-2 py-1 text-xs"
+                    >
+                      New Chat
+                    </Button>
                   </div>
-                </div>
-                {!selectedConnectionId && (
-                  <Alert variant="destructive" className="mt-4">
-                    <AlertTitle>No database selected</AlertTitle>
-                    <AlertDescription>
-                      Please select a database connection to start querying.
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </CardContent>
-            </Card>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <ScrollArea className="h-[140px] overflow-y-auto">
+                    <ul className="divide-y divide-border">
+                      {selectedConnectionId &&
+                        currentConversation?.map((conversation) => (
+                            <li
+                              key={conversation.id}
+                              className={`list-item px-2 py-1 cursor-pointer text-xs flex items-center min-h-[32px] ${
+                                conversation.id === conversationId ? "selected font-medium text-foreground dark:text-foreground pl-1" : "text-foreground dark:text-foreground"
+                              }`}
+                            >
+                              <div className="flex items-center justify-between w-full">
+                                {editingTitleId === conversation.id ? (
+                                  <div className="flex-1 mr-1">
+                                    <Input
+                                      value={editingTitle}
+                                      onChange={(e) => setEditingTitle(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          handleTitleSave(conversation.id);
+                                        } else if (e.key === 'Escape') {
+                                          setEditingTitleId(null);
+                                          setEditingTitle("");
+                                        }
+                                      }}
+                                      className="h-6 text-xs px-1 bg-background dark:bg-background text-foreground dark:text-foreground"
+                                      autoFocus
+                                    />
+                                  </div>
+                                ) : (
+                                  <div
+                                    className="flex-1 truncate"
+                                    onClick={() => handleConversationClick(conversation)}
+                                  >
+                                    <p className="font-medium truncate text-xs">
+                                      {conversation.title}
+                                    </p>
+                                  </div>
+                                )}
+                                <div className="flex items-center space-x-1">
+                                  {editingTitleId === conversation.id ? (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => handleTitleSave(conversation.id)}
+                                        className="h-6 w-6 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 btn-hover-enhanced"
+                                      >
+                                        <Check className="h-3 w-3" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() => {
+                                          setEditingTitleId(null);
+                                          setEditingTitle("");
+                                        }}
+                                        className="h-6 w-6 text-muted-foreground dark:text-muted-foreground hover:text-foreground dark:hover:text-foreground btn-hover-enhanced"
+                                      >
+                                        <RotateCcw className="h-3 w-3" />
+                                      </Button>
+                                    </>
+                                  ) : (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleTitleEdit(conversation);
+                                      }}
+                                      className="h-6 w-6 text-muted-foreground dark:text-muted-foreground hover:text-primary dark:hover:text-primary btn-hover-enhanced"
+                                    >
+                                      <Pencil className="h-3 w-3" />
+                                    </Button>
+                                  )}
+                                </div>
+                              </div>
+                            </li>
+                          )
+                        )}
+                    </ul>
+                  </ScrollArea>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {/* Resizable container for chat and SQL panels */}
+          <div 
+            id="resizable-container" 
+            className={`flex flex-1 h-[calc(100vh-120px)] overflow-hidden`}
+          >
+            {/* Chat panel */}
+            <div 
+              style={{ 
+                width: showResultPanel ? `${panelSplit}%` : '100%',
+                minWidth: showResultPanel ? '20%' : '100%',
+                maxWidth: showResultPanel ? '80%' : '100%',
+                transition: showResultPanel ? 'none' : 'width 0.2s ease-in-out'
+              }}
+              className="flex flex-col h-full"
+            >
+                              <Card className="flex-1 flex flex-col bg-card border border-border shadow-md overflow-hidden">
+                <CardContent className="flex-1 overflow-hidden p-4 relative">
+                  <ScrollArea className="h-full pr-4">
+                    <div className="space-y-4 h-[calc(80vh-65px)]">
+                      {messages.map(renderMessage)}
+                      <div ref={messagesEndRef} />
+                    </div>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={scrollToBottom}
+                        aria-label="Scroll to Bottom"
+                        className="absolute bottom-0 right-4 z-10 shadow-lg"
+                    >
+                      <ArrowDown className="w-4 h-4 mr-1" />
+                    </Button>
+                  </ScrollArea>
+                </CardContent>
+                <CardContent className="p-3 border-t border-border bg-secondary dark:bg-secondary rounded-b-lg">
+                  <div className="flex space-x-2">
+                    <Textarea
+                      value={inputMessage}
+                      onChange={(e) => setInputMessage(e.target.value)}
+                      placeholder="Type your query..."
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleSendMessage();
+                        }
+                      }}
+                      className="flex-1 min-h-[30px] max-h-[100px] resize-y"
+                      disabled={!selectedConnectionId}
+                    />
+                    <div className="flex flex-col items-end">
+                    <Button
+                      onClick={handleSendMessage}
+                      disabled={isLoading || isStreaming || !selectedConnectionId}
+                      className="bg-primary hover:bg-primary/80 text-primary-foreground"
+                    >
+                      {isLoading ? (
+                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4 mr-2" />
+                      )}
+                      Send
+                    </Button>
+                    {isStreaming && (
+                        <Button
+                            onClick={() => {
+                              setStopStreaming(true);
+                              stopStreamingRef.current = true;
+                            }}
+                            variant="destructive"
+                            className="mt-2"
+                            size="icon"
+                            aria-label="Stop Streaming"
+                        >
+                          <Ban className="w-3 h-3" />
+                        </Button>
+                    )}
+                    </div>
+                  </div>
+                  {!selectedConnectionId && (
+                    <Alert variant="destructive" className="mt-4">
+                      <AlertTitle>No database selected</AlertTitle>
+                      <AlertDescription>
+                        Please select a database connection to start querying.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Resizable splitter - only shown when SQL result panel is active */}
+            {showResultPanel && (
+              <ResizableSplitter
+                onResize={handlePanelResize}
+                initialPosition={panelSplit}
+                minLeftWidth={20}
+                minRightWidth={20}
+                className="h-full flex-shrink-0"
+              />
+            )}
+
+            {/* SQL Result panel */}
+            {showResultPanel && (
+              <div 
+                style={{ 
+                  width: `${100 - panelSplit}%`,
+                  minWidth: '20%',
+                  maxWidth: '80%',
+                  transition: 'none'
+                }}
+                className="h-full flex-shrink-0"
+              >
+                <SqlResultPanel 
+                  results={activeQueryResult?.result} 
+                  hasError={activeQueryResult?.hasError || false}
+                  onClose={closeResultPanel} 
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -1316,6 +1474,6 @@ export default function DatabaseQueryApp() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </div>
+    </Box>
   );
 }
