@@ -427,7 +427,7 @@ export default function SharedMessagePage({ params }: { params: { token: string 
         const isEditing = editingSqlId === message?.id;
 
         return (
-          <div key={index} className="my-3 bg-blue-100 text-blue-900 p-3 rounded-lg">
+          <div key={index} className="my-3 bg-accent/10 dark:bg-accent/20 text-accent-foreground dark:text-accent-foreground p-3 rounded-lg">
             <div className="flex justify-between items-center mb-2">
               <p className="font-semibold">Generated SQL:</p>
               <div className="flex gap-2">
@@ -444,7 +444,7 @@ export default function SharedMessagePage({ params }: { params: { token: string 
                             {copySuccessId === message?.id ? (
                               <Check className="h-4 w-4 text-green-500" />
                             ) : (
-                              <Copy className="h-4 w-4 text-blue-600" />
+                              <Copy className="h-4 w-4" />
                             )}
                           </Button>
                         </TooltipTrigger>
@@ -467,7 +467,7 @@ export default function SharedMessagePage({ params }: { params: { token: string 
                                 {loadingOperation.type === 'explain' && loadingOperation.messageId === message?.id ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
-                                  <FileText className="h-4 w-4 text-blue-600" />
+                                  <FileText className="h-4 w-4" />
                                 )}
                               </Button>
                             </TooltipTrigger>
@@ -488,7 +488,7 @@ export default function SharedMessagePage({ params }: { params: { token: string 
                                 {loadingOperation.type === 'run' && loadingOperation.messageId === message?.id ? (
                                   <Loader2 className="h-4 w-4 animate-spin" />
                                 ) : (
-                                  <Play className="h-4 w-4 text-blue-600" />
+                                  <Play className="h-4 w-4" />
                                 )}
                               </Button>
                             </TooltipTrigger>
@@ -511,7 +511,7 @@ export default function SharedMessagePage({ params }: { params: { token: string 
                                 setEditedSql(sql);
                               }}
                             >
-                              <Edit className="w-4 h-4 text-blue-600" />
+                              <Edit className="w-4 h-4" />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent>
@@ -529,7 +529,7 @@ export default function SharedMessagePage({ params }: { params: { token: string 
                 <Textarea
                   value={editedSql}
                   onChange={(e) => setEditedSql(e.target.value)}
-                  className="min-h-[100px] font-mono bg-white border border-blue-200"
+                  className="min-h-[100px] font-mono bg-background dark:bg-background text-foreground dark:text-foreground border border-input"
                 />
                 <div className="flex justify-end gap-2">
                   <Button
@@ -554,7 +554,7 @@ export default function SharedMessagePage({ params }: { params: { token: string 
                 </div>
               </div>
             ) : (
-              <pre className="bg-gray-800 text-gray-100 p-2 rounded-md overflow-x-auto font-mono text-sm whitespace-pre-wrap">{sql}</pre>
+              <pre className="bg-gray-800 dark:bg-gray-900 text-gray-100 p-2 rounded-md overflow-x-auto font-mono text-sm whitespace-pre-wrap">{sql}</pre>
             )}
           </div>
         );
@@ -621,7 +621,7 @@ export default function SharedMessagePage({ params }: { params: { token: string 
         <Card className="w-full max-w-md">
           <CardContent className="p-6">
             <h1 className="text-2xl font-bold mb-4">Message Not Found</h1>
-            <p className="text-gray-600">The shared message could not be found or has been deleted.</p>
+            <p className="text-muted-foreground">The shared message could not be found or has been deleted.</p>
           </CardContent>
         </Card>
       </div>
@@ -629,8 +629,8 @@ export default function SharedMessagePage({ params }: { params: { token: string 
   }
 
   const messageClass = message.sender === 'user' 
-    ? 'bg-blue-100 text-blue-900' 
-    : 'bg-gray-100 text-gray-900';
+    ? 'bg-primary/10 dark:bg-primary/20 text-foreground dark:text-foreground'
+    : 'bg-secondary dark:bg-secondary text-foreground dark:text-foreground';
 
   return (
     <div className="container mx-auto py-8">
@@ -638,14 +638,14 @@ export default function SharedMessagePage({ params }: { params: { token: string 
         <div className="w-full max-w-6xl">
           <div className="mb-8 text-center">
             <h1 className="text-2xl font-bold mb-2">Shared Message</h1>
-            <div className="text-sm text-gray-600 space-y-1">
+            <div className="text-sm text-muted-foreground space-y-1">
               <p>Shared on {formatJapanTime(message.timestamp)}</p>
               {canEdit && (
-                <p className="text-green-600">You have permission to run, explain and edit this message</p>
+                <p className="text-green-600 dark:text-green-400">You have permission to run, explain and edit this message</p>
               )}
               {(!session && process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true') && (
                 <div className="flex items-center justify-center gap-2 mt-2">
-                  <p className="text-blue-600">Sign in to run and explain and Edit SQL queries</p>
+                  <p className="text-primary dark:text-primary">Sign in to run and explain and Edit SQL queries</p>
                   <Button
                     variant="outline"
                     size="sm"
@@ -671,11 +671,11 @@ export default function SharedMessagePage({ params }: { params: { token: string 
               }}
               className="h-full"
             >
-              <div className="bg-white rounded-lg shadow-lg p-6 h-full overflow-auto">
+              <div className="bg-card dark:bg-card rounded-lg shadow-lg p-6 h-full overflow-auto border border-border">
                 <div className="flex flex-col space-y-6">
                   <div className="flex items-start">
                     {message.sender === "user" && session?.user ? (
-                      <div className="flex items-center space-x-2 min-w-[120px]">
+                      <div className="flex items-center space-x-2">
                         <Avatar className="w-8 h-8">
                           {session.user.image ? (
                             <img
@@ -684,20 +684,20 @@ export default function SharedMessagePage({ params }: { params: { token: string 
                               className="w-full h-full object-cover"
                             />
                           ) : (
-                            <AvatarFallback className="bg-blue-100">
-                                <User className="w-5 h-5 text-blue-600" />
+                            <AvatarFallback className="bg-primary/20">
+                                <User className="w-5 h-5 text-primary" />
                             </AvatarFallback>
                           )}
                         </Avatar>
                       </div>
                     ) : (
-                      <div className="flex items-center space-x-2 min-w-[120px]">
+                      <div className="flex items-center space-x-2">
                         <Avatar className="w-8 h-8">
-                          <AvatarFallback className="bg-gray-300">
+                          <AvatarFallback className="bg-muted">
                             {message.sender === "user" ? (
-                              <User className="w-5 h-5 text-blue-600" />
+                              <User className="w-5 h-5 text-primary" />
                             ) : (
-                              <Bot className="w-5 h-5 text-gray-600" />
+                              <Bot className="w-5 h-5 text-muted-foreground" />
                             )}
                           </AvatarFallback>
                         </Avatar>
@@ -710,16 +710,18 @@ export default function SharedMessagePage({ params }: { params: { token: string 
                           <AlertDescription>{message.content}</AlertDescription>
                         </Alert>
                       ) : (
-                        <div className="prose dark:prose-invert max-w-none">
-                          {renderContent(message.content)}
+                        <div className={`rounded-lg p-3 ${messageClass} max-w-[600px] shadow-md`}>
+                          <div className="prose dark:prose-invert max-w-none">
+                            {renderContent(message.content)}
+                          </div>
                         </div>
                       )}
                       {message.result && (
-                        <div className="mt-4 bg-white rounded-md shadow-inner overflow-x-auto">
+                        <div className="mt-4 bg-background dark:bg-background rounded-md shadow-inner overflow-x-auto">
                           {renderResult()}
                         </div>
                       )}
-                      <p className="text-xs text-gray-500 mt-2">
+                      <p className="text-xs text-muted-foreground mt-2">
                         {formatJapanTime(message.timestamp)}
                       </p>
                       
