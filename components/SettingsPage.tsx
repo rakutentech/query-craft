@@ -125,6 +125,7 @@ export default function SettingsPage() {
   const [showSchemaConfirmDialog, setShowSchemaConfirmDialog] = useState(false);
   const [connectionsWithoutSchema, setConnectionsWithoutSchema] = useState<number[]>([]);
   const [testingConnection, setTestingConnection] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     fetchSettings();
@@ -199,6 +200,7 @@ export default function SettingsPage() {
   };
 
   const fetchSettings = async () => {
+    setLoading(true);
     try {
       const response = await fetch(`${BASE_PATH}/api/settings`);
       if (!response.ok) {
@@ -223,6 +225,8 @@ export default function SettingsPage() {
     } catch (error) {
       console.error("Error fetching settings:", error);
       setError("Failed to load settings. Please try again.");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -415,9 +419,17 @@ export default function SettingsPage() {
     }
   };
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Spinner className="w-8 h-8 animate-spin" />
+      </div>
+    );
+  }
+
   return (
     <div className="container mx-auto py-8 px-4">
-      <h1 className="text-2xl font-bold mb-6 text-gray-800">
+      <h1 className="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-100">
         Settings
       </h1>
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
