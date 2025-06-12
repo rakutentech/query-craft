@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
+import { Spinner } from "@radix-ui/themes";
 import {
   Tooltip,
   TooltipContent,
@@ -1109,7 +1110,7 @@ export default function DatabaseQueryApp() {
   if (status === "loading" || appLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+        <Spinner className="w-8 h-8 animate-spin" />
       </div>
     );
   }
