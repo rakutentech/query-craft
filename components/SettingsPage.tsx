@@ -128,6 +128,15 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Try to load cached settings first for instant display
+    const cached = localStorage.getItem('settingsCache');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        setSettings(parsed);
+        setLoading(false);
+      } catch {}
+    }
     fetchSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -209,17 +218,21 @@ export default function SettingsPage() {
       let data = await response.json();
       if (data && data.databaseConnections.length > 0) {
         data.settings.systemPrompt =  data.settings.systemPrompt? data.settings.systemPrompt : DEFAULT_SYSTEM_PROMPT;
-        setSettings({
+        const newSettings = {
           aiSettings: data.settings,
           databaseConnections: data.databaseConnections
-        });
+        };
+        setSettings(newSettings);
+        localStorage.setItem('settingsCache', JSON.stringify(newSettings));
       } else {
         const defaultSettings = await fetchDefaultSettings();
         if (defaultSettings) {
-          setSettings({
+          const newSettings = {
             aiSettings: { id: 1, systemPrompt: DEFAULT_SYSTEM_PROMPT },
             databaseConnections: defaultSettings.databaseConnections
-          });
+          };
+          setSettings(newSettings);
+          localStorage.setItem('settingsCache', JSON.stringify(newSettings));
         }
       }
     } catch (error) {

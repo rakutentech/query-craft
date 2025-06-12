@@ -159,6 +159,18 @@ export default function DatabaseQueryApp() {
 
   useEffect(() => {
     let isMounted = true;
+    // Try to load cached databaseConnections for instant display
+    const cached = localStorage.getItem('dbConnectionsCache');
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        setDatabaseConnections(parsed);
+        setAppLoading(false);
+      } catch (err) {
+        console.error('Error parsing dbConnectionsCache:', err);
+        // Do not interrupt the app, just continue
+      }
+    }
     const load = async () => {
       try {
         await checkSettings();
@@ -231,6 +243,7 @@ export default function DatabaseQueryApp() {
       }
       const data = await response.json();
       setDatabaseConnections(data.databaseConnections);
+      localStorage.setItem('dbConnectionsCache', JSON.stringify(data.databaseConnections));
       if (data.databaseConnections.length > 0) {
         setSelectedConnectionId(data.databaseConnections[0].id);
       }
