@@ -154,11 +154,21 @@ export default function DatabaseQueryApp() {
     isMedium: false  // >= 768px (md breakpoint)
   });
   const [panelSplit, setPanelSplit] = useState<number>(50); // Default 50% split
+  const [appLoading, setAppLoading] = useState(true);
 
   useEffect(() => {
-    checkSettings();
-    fetchDatabaseConnections();
+    let isMounted = true;
+    const load = async () => {
+      try {
+        await checkSettings();
+        await fetchDatabaseConnections();
+      } finally {
+        if (isMounted) setAppLoading(false);
+      }
+    };
+    load();
     setShowAuth(ENABLE_OAUTH === 'true');
+    return () => { isMounted = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -963,6 +973,16 @@ export default function DatabaseQueryApp() {
 
   const handleTagSelect = (tag: string | null) => {
     setSelectedTag(tag);
+    if (tag) {
+      const firstConn = databaseConnections.find(conn => {
+        if (!conn.tag) return false;
+        const tags = conn.tag.split(',').map(t => t.trim());
+        return tags.includes(tag);
+      });
+      if (firstConn && typeof firstConn.id === 'number') {
+        setSelectedConnectionId(firstConn.id);
+      }
+    }
   };
 
   const handleTitleEdit = (conversation: Conversation) => {
@@ -1086,7 +1106,7 @@ export default function DatabaseQueryApp() {
     }
   }, []);
 
-  if (status === "loading") {
+  if (status === "loading" || appLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
@@ -1158,10 +1178,10 @@ export default function DatabaseQueryApp() {
           </div>
         </div>
 
-        <div className="flex space-x-0 lg:space-x-4 relative">
+        <div className={`flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:space-x-4 relative`}>
           {/* Left panel (databases and history) - hidden when SQL result panel is */}
           {showLeftPanel && (
-            <div className="w-full lg:w-1/5 lg:min-w-[220px] xl:min-w-[250px] absolute lg:relative z-10 bg-white dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent">
+            <div className="w-full lg:w-1/5 lg:min-w-[220px] xl:min-w-[250px] bg-white dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent">
               <Card className="mb-2 h-[calc(100vh-350px)] flex flex-col bg-card border border-border shadow-md">
                 <CardHeader className="border-b border-border py-2">
                   <div className="flex justify-between items-center">
@@ -1337,7 +1357,7 @@ export default function DatabaseQueryApp() {
           {/* Resizable container for chat and SQL panels */}
           <div 
             id="resizable-container" 
-            className={`flex flex-1 h-[calc(100vh-120px)] overflow-hidden`}
+            className="flex flex-1 h-[calc(100vh-120px)] overflow-hidden"
           >
             {/* Chat panel */}
             <div 
