@@ -1198,20 +1198,35 @@ export async function storeUser(user: User): Promise<void> {
 export async function generateShareToken(messageId: number): Promise<string> {
   const db = await getDb();
   const shareToken = crypto.randomBytes(16).toString('hex');
+  let result;
 
-  if (databaseConfig.type === 'mysql') {
-    await (db as any).execute(
-      'UPDATE messages SET share_token = ? WHERE id = ?',
-      [shareToken, messageId]
-    );
-  } else {
-    await (db as any).run(
-      'UPDATE messages SET share_token = ? WHERE id = ?',
-      [shareToken, messageId]
-    );
+  try {
+    if (databaseConfig.type === 'mysql') {
+      result = await (db as any).execute(
+        'UPDATE messages SET share_token = ? WHERE id = ?',
+        [shareToken, messageId]
+      );
+      // MySQL: result[0].affectedRows
+      if (!result || (result[0]?.affectedRows ?? 0) === 0) {
+        console.error(`generateShareToken: No message updated for id ${messageId}`);
+        throw new Error('Failed to update share token for message');
+      }
+    } else {
+      result = await (db as any).run(
+        'UPDATE messages SET share_token = ? WHERE id = ?',
+        [shareToken, messageId]
+      );
+      // SQLite: result.changes
+      if (!result || (result.changes ?? 0) === 0) {
+        console.error(`generateShareToken: No message updated for id ${messageId}`);
+        throw new Error('Failed to update share token for message');
+      }
+    }
+    return shareToken;
+  } catch (err) {
+    console.error('generateShareToken error:', err);
+    throw new Error('Failed to generate share token');
   }
-
-  return shareToken;
 }
 
 export async function getSharedMessage(token: string): Promise<{ message: Message; canEdit: boolean } | null> {
@@ -1367,6 +1382,37 @@ export async function updateDatabaseConnection(connection: DatabaseConnection, u
         userId
       ]
     );
+  }
+}
+
+// Get recent unique user messages for recommendations
+export async function getUserMessageRecommendations(userId: string, limit: number = 10): Promise<string[]> {
+  const db = await getDb();
+  console.log(`Fetching user message recommendations for userId: ${userId}, limit: ${limit}`);
+  // Join messages and conversations to get user_id
+  if (databaseConfig.type === 'mysql') {
+    // MySQL: Use subquery to avoid ORDER BY with DISTINCT error
+    const [rows] = await (db as any).execute(
+      `SELECT m.content
+         FROM messages m
+         JOIN conversations c ON m.conversationId = c.id
+         WHERE m.sender = 'user' AND c.user_id = ?
+         ORDER BY m.timestamp DESC
+       LIMIT ?`,
+      [userId, limit]
+    );
+    return rows.map((r: any) => r.content);
+  } else {
+    const rows = await (db as SQLiteDatabase).all<{ content: string }[]>(
+      `SELECT DISTINCT m.content
+       FROM messages m
+       JOIN conversations c ON m.conversationId = c.id
+       WHERE m.sender = 'user' AND c.user_id = ?
+       ORDER BY m.timestamp DESC
+       LIMIT ?`,
+      [userId, limit]
+    );
+    return rows.map(r => r.content);
   }
 }
 

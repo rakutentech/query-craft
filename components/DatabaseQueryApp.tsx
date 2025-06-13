@@ -156,6 +156,9 @@ export default function DatabaseQueryApp() {
   });
   const [panelSplit, setPanelSplit] = useState<number>(50); // Default 50% split
   const [appLoading, setAppLoading] = useState(true);
+  const [recommendations, setRecommendations] = useState<string[]>([]);
+  const [showRecommendations, setShowRecommendations] = useState(false);
+  const recommendationsRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -1120,6 +1123,36 @@ export default function DatabaseQueryApp() {
     }
   }, []);
 
+  // Fetch recommendations on input focus or when input changes
+  useEffect(() => {
+    if (!showRecommendations) return;
+    const fetchRecommendations = async () => {
+      try {
+        const res = await fetch('/api/recommendations?limit=10');
+        const data = await res.json();
+        setRecommendations(data.recommendations || []);
+      } catch (err) {
+        setRecommendations([]);
+      }
+    };
+    fetchRecommendations();
+  }, [showRecommendations]);
+
+  // Hide dropdown on click outside
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (recommendationsRef.current && !recommendationsRef.current.contains(event.target as Node)) {
+        setShowRecommendations(false);
+      }
+    }
+    if (showRecommendations) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showRecommendations]);
+
   if (status === "loading" || appLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -1383,7 +1416,7 @@ export default function DatabaseQueryApp() {
               }}
               className="flex flex-col h-full"
             >
-                              <Card className="flex-1 flex flex-col bg-card border border-border shadow-md overflow-hidden">
+              <Card className="flex-1 flex flex-col bg-card border border-border shadow-md overflow-hidden">
                 <CardContent className="flex-1 overflow-hidden p-4 relative">
                   <ScrollArea className="h-full pr-4">
                     <div className="space-y-4 h-[calc(80vh-65px)]">
@@ -1402,20 +1435,45 @@ export default function DatabaseQueryApp() {
                   </ScrollArea>
                 </CardContent>
                 <CardContent className="p-3 border-t border-border bg-secondary dark:bg-secondary rounded-b-lg">
-                  <div className="flex space-x-2">
+                  <div className="flex space-x-2 relative" ref={recommendationsRef}>
                     <Textarea
                       value={inputMessage}
-                      onChange={(e) => setInputMessage(e.target.value)}
+                      onChange={(e) => {
+                        setInputMessage(e.target.value);
+                        setShowRecommendations(true);
+                      }}
                       placeholder="Type your query..."
+                      onFocus={() => setShowRecommendations(true)}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) {
                           e.preventDefault();
                           handleSendMessage();
+                          setShowRecommendations(false);
                         }
                       }}
                       className="flex-1 min-h-[30px] max-h-[100px] resize-y"
                       disabled={!selectedConnectionId}
                     />
+                    {showRecommendations && recommendations.length > 0 && (
+                      <ul className="absolute left-0 top-full mt-1 w-full bg-white dark:bg-gray-900 border border-border rounded shadow-lg z-20 max-h-48 overflow-auto">
+                        {recommendations
+                          .filter((rec) =>
+                            inputMessage.length === 0 || rec.toLowerCase().includes(inputMessage.toLowerCase())
+                          )
+                          .map((rec, idx) => (
+                            <li
+                              key={idx}
+                              className="px-3 py-2 hover:bg-primary/10 cursor-pointer text-sm"
+                              onMouseDown={() => {
+                                setInputMessage(rec);
+                                setShowRecommendations(false);
+                              }}
+                            >
+                              {rec}
+                            </li>
+                          ))}
+                      </ul>
+                    )}
                     <div className="flex flex-col items-end">
                     <Button
                       onClick={handleSendMessage}
