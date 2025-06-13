@@ -815,11 +815,58 @@ export default function DatabaseQueryApp() {
                 </div>
               </div>
               {isEditing ? (
-                <Textarea
-                  value={currentSql}
-                  onChange={(e) => handleSqlEdit(messageId, e.target.value)}
-                  className="font-mono bg-gray-800 text-gray-100 p-2 rounded-md w-full min-h-[100px]"
-                />
+                <div className="relative">
+                  <Textarea
+                    value={currentSql}
+                    onChange={(e) => handleSqlEdit(messageId, e.target.value)}
+                    className="font-mono bg-gray-800 text-gray-100 p-2 rounded-md w-full min-h-[100px] resize-none sql-editor"
+                    style={{ 
+                      outline: 'none',
+                      caretColor: 'currentColor',
+                      userSelect: 'text',
+                      WebkitUserSelect: 'text',
+                      MozUserSelect: 'text',
+                      msUserSelect: 'text',
+                      cursor: 'text'
+                    }}
+                    onFocus={(e) => {
+                      e.target.style.cursor = 'text';
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        handleSqlEdit(messageId, currentSql);
+                        setEditingSqlId(null);
+                      }
+                    }}
+                    autoFocus
+                  />
+                  <div className="absolute bottom-2 right-2 flex space-x-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        handleSqlEdit(messageId, currentSql);
+                        setEditingSqlId(null);
+                      }}
+                      className="h-8 px-2 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300"
+                    >
+                      <Check className="h-4 w-4 mr-1" />
+                      Save
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setEditingSqlId(null);
+                      }}
+                      className="h-8 px-2 text-muted-foreground dark:text-muted-foreground hover:text-foreground dark:hover:text-foreground"
+                    >
+                      <X className="h-4 w-4 mr-1" />
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
               ) : (
                 <pre className="bg-gray-800 text-gray-100 p-2 rounded-md overflow-x-auto">
                   <code>{currentSql}</code>
@@ -1187,6 +1234,36 @@ export default function DatabaseQueryApp() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showRecommendations]);
 
+  // Recommendation dropdown keyboard navigation and accessibility
+  const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
+
+  // Keyboard navigation for recommendations
+  useEffect(() => {
+    if (!showRecommendations || recommendations.length === 0) {
+      setHighlightedIndex(-1);
+      return;
+    }
+    setHighlightedIndex(0);
+  }, [showRecommendations, recommendations.length]);
+
+  const handleRecommendationKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!showRecommendations || recommendations.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev + 1) % recommendations.length);
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => (prev - 1 + recommendations.length) % recommendations.length);
+    } else if (e.key === 'Enter') {
+      if (highlightedIndex >= 0 && highlightedIndex < recommendations.length) {
+        setInputMessage(recommendations[highlightedIndex]);
+        setShowRecommendations(false);
+      }
+    } else if (e.key === 'Escape') {
+      setShowRecommendations(false);
+    }
+  };
+
   if (status === "loading" || appLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -1349,24 +1426,27 @@ export default function DatabaseQueryApp() {
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
-                  <div className="flex items-center justify-between p-2 border-b border-gray-200">
+                  <div className="flex items-center justify-between p-2 border-b border-gray-100">
                     <Input
-                        placeholder="Search..."
-                        className="border border-gray-300 rounded-md p-1 w-full"
-                        onChange={(e) => filterHistory(e.target.value)}
+                      placeholder="Search..."
+                      className="h-7 text-xs border border-gray-300 rounded-md px-2 w-full"
+                      onChange={(e) => filterHistory(e.target.value)}
                     />
                   </div>
-                  <ScrollArea className="h-[140px] overflow-y-auto">
-                    <ul className="divide-y divide-border">
-                      {selectedConnectionId &&
-                        currentConversation?.map((conversation) => (
+                  <ScrollArea className="h-[140px]">
+                    <div className="">
+                      <ul className="divide-y divide-border">
+                        {selectedConnectionId &&
+                          currentConversation?.map((conversation) => (
                             <li
                               key={conversation.id}
-                              className={`list-item px-2 py-1 cursor-pointer text-xs flex items-center min-h-[32px] ${
-                                conversation.id === conversationId ? "selected font-medium text-foreground dark:text-foreground pl-1" : "text-foreground dark:text-foreground"
+                              className={`list-item px-2 py-1 cursor-pointer flex items-center ${
+                                conversation.id === conversationId 
+                                  ? "selected font-medium text-foreground dark:text-foreground" 
+                                  : "text-foreground dark:text-foreground"
                               }`}
                             >
-                              <div className="flex items-center justify-between w-full">
+                              <div className="flex items-center justify-between w-full pr-1">
                                 {editingTitleId === conversation.id ? (
                                   <div className="flex-1 mr-1">
                                     <Input
@@ -1389,12 +1469,12 @@ export default function DatabaseQueryApp() {
                                     className="flex-1 truncate"
                                     onClick={() => handleConversationClick(conversation)}
                                   >
-                                    <p className="font-medium truncate text-xs">
+                                    <p className="text-xs font-medium truncate">
                                       {conversation.title}
                                     </p>
                                   </div>
                                 )}
-                                <div className="flex items-center space-x-1">
+                                <div className="flex items-center space-x-1 flex-shrink-0">
                                   {editingTitleId === conversation.id ? (
                                     <>
                                       <Button
@@ -1433,9 +1513,9 @@ export default function DatabaseQueryApp() {
                                 </div>
                               </div>
                             </li>
-                          )
-                        )}
-                    </ul>
+                          ))}
+                      </ul>
+                    </div>
                   </ScrollArea>
                 </CardContent>
               </Card>
@@ -1462,13 +1542,13 @@ export default function DatabaseQueryApp() {
                   <ScrollArea className="h-full pr-4">
                     <div className="space-y-4 h-[calc(80vh-65px)]">
                       {messages.length === 0 && (
-                          <div>
-                            <p className="text-center text-gray-500">
+                          <div className="text-center">
+                            <p className="text-muted-foreground dark:text-muted-foreground">
                               Start a conversation by typing your query.
                               <br />
                               Here are the available tables in your database:
                             </p>
-                            <div className="">
+                            <div className="mt-4">
                               <TagCloud className="mt-4" tags={listOfDBTables} />
                             </div>
                           </div>
@@ -1498,7 +1578,8 @@ export default function DatabaseQueryApp() {
                       placeholder="Type your query..."
                       onFocus={() => setShowRecommendations(true)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
+                        handleRecommendationKeyDown(e);
+                        if (e.key === 'Enter' && !e.shiftKey && (!showRecommendations || highlightedIndex === -1)) {
                           e.preventDefault();
                           handleSendMessage();
                           setShowRecommendations(false);
@@ -1506,9 +1587,23 @@ export default function DatabaseQueryApp() {
                       }}
                       className="flex-1 min-h-[30px] max-h-[100px] resize-y"
                       disabled={!selectedConnectionId}
+                      aria-autocomplete="list"
+                      aria-controls={showRecommendations ? 'recommendations-list' : undefined}
+                      aria-activedescendant={highlightedIndex >= 0 ? `recommendation-item-${highlightedIndex}` : undefined}
+                      aria-expanded={showRecommendations}
+                      role="combobox"
                     />
                     {showRecommendations && recommendations.length > 0 && (
-                      <ul className="absolute left-0 top-full mt-1 w-full bg-white dark:bg-gray-900 border border-border rounded shadow-lg z-20 max-h-48 overflow-auto">
+                      <ul
+                        id="recommendations-list"
+                        role="listbox"
+                        aria-label="Recent queries"
+                        className="absolute left-0 bottom-full mb-2 w-full bg-background border border-border rounded-lg shadow-lg z-20 max-h-48 overflow-auto transition-all duration-200 ease-in-out"
+                        style={{
+                          boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
+                          animation: 'fadeInDropdown 0.18s cubic-bezier(0.4,0,0.2,1)',
+                        }}
+                      >
                         {recommendations
                           .filter((rec) =>
                             inputMessage.length === 0 || rec.toLowerCase().includes(inputMessage.toLowerCase())
@@ -1516,17 +1611,31 @@ export default function DatabaseQueryApp() {
                           .map((rec, idx) => (
                             <li
                               key={idx}
-                              className="px-3 py-2 hover:bg-primary/10 cursor-pointer text-sm"
+                              id={`recommendation-item-${idx}`}
+                              role="option"
+                              aria-selected={highlightedIndex === idx}
+                              className={`list-item px-3 py-2 cursor-pointer text-sm ${
+                                highlightedIndex === idx
+                                  ? 'selected font-medium text-foreground dark:text-foreground pl-1' 
+                                  : 'text-foreground dark:text-foreground'
+                              }`}
                               onMouseDown={() => {
                                 setInputMessage(rec);
                                 setShowRecommendations(false);
                               }}
+                              onMouseEnter={() => setHighlightedIndex(idx)}
                             >
                               {rec}
                             </li>
                           ))}
                       </ul>
                     )}
+                    <style jsx global>{`
+                      @keyframes fadeInDropdown {
+                        from { opacity: 0; transform: translateY(8px); }
+                        to { opacity: 1; transform: translateY(0); }
+                      }
+                    `}</style>
                     <div className="flex flex-col items-end">
                     <Button
                       onClick={handleSendMessage}
