@@ -1111,17 +1111,23 @@ export async function getDatabaseSchema(connection: DatabaseConnection): Promise
 }
 
 async function getMySQLSchema(connection: mysql.Connection, dbName: string): Promise<string> {
-  const [tables] = await connection.query(`
-    SELECT TABLE_NAME
-    FROM INFORMATION_SCHEMA.TABLES
-    WHERE TABLE_SCHEMA = ?
-    AND TABLE_TYPE = 'BASE TABLE'
-  `, [dbName]);
+  const queryString = mysql.format("SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'", dbName);
+  const [tables] = await new Promise<any[]>((resolve, reject) => {
+    connection.query(queryString, (err: any, results: any) => {
+      if (err) reject(err);
+      else resolve([results]);
+    });
+  });
 
   let schema = 'Database Type: MySQL\n\n';
 
   for (const table of tables as any[]) {
-    const [createTableResult] = await connection.query(`SHOW CREATE TABLE ${table.TABLE_NAME}`);
+    const [createTableResult] = await new Promise<any[]>((resolve, reject) => {
+      connection.query(`SHOW CREATE TABLE ${table.TABLE_NAME}`, (err: any, results: any) => {
+        if (err) reject(err);
+        else resolve([results]);
+      });
+    });
     const tableResult = createTableResult as any
     const createTableStatement = tableResult[0]['Create Table'];
 
