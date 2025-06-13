@@ -19,6 +19,14 @@ import {generateOllamaChatResponse} from "@/app/lib/ollama";
 import {generateAzureChatResponse} from "@/app/lib/azure-ai";
 import { ChatInput } from "@lmstudio/sdk";
 
+const stopFlags = new Map<number, boolean>();
+
+export async function PUT(request: NextRequest) {
+  const { conversationId } = await request.json();
+  stopFlags.set(conversationId, true);
+  return new Response("OK");
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -72,7 +80,6 @@ export async function POST(request: NextRequest) {
     let aiStream: ReadableStream;
     let stream;
     const encoder = new TextEncoder();
-    let accumulated = "";
 
     // Check providerConfig to determine which provider to use
     switch (providerConfig.selectedProvider) {
@@ -308,29 +315,39 @@ async function createAIStream({
   updateConversationTitle: (id: number, title: string) => Promise<void>;
 }) {
   let accumulated = "";
+
   return new ReadableStream({
     async start(controller) {
-      // Send meta event at the start
       controller.enqueue(encoder.encode(`event:meta\ndata:${JSON.stringify({
         conversationId: currentConversationId,
         conversationHistory: await getConversationMessages(currentConversationId)
       })}\n\n`));
 
       const reader = aiStream.getReader();
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const chunk = typeof value === "string" ? value : new TextDecoder().decode(value);
-        accumulated += chunk;
-        controller.enqueue(typeof value === "string" ? encoder.encode(value) : value);
-      }
-      controller.close();
-
-      // Store the full response in conversation history
-      await addMessage(currentConversationId, accumulated, "system");
-      // Optionally update conversation title if new
-      if (!conversationId) {
-        await updateConversationTitle(currentConversationId, query.substring(0, 50) + "...");
+      let stopped = false;
+      try {
+        while (true) {
+          if (stopFlags.get(currentConversationId)) {
+            stopped = true;
+            break;
+          }
+          const { value, done } = await reader.read();
+          if (done) break;
+          const chunk = typeof value === "string" ? value : new TextDecoder().decode(value);
+          accumulated += chunk;
+          controller.enqueue(typeof value === "string" ? encoder.encode(value) : value);
+        }
+      } finally {
+        controller.close();
+        // Store the full response in conversation history
+        await addMessage(currentConversationId, accumulated, "system");
+        if (!conversationId) {
+          await updateConversationTitle(currentConversationId, query.substring(0, 50) + "...");
+        }
+        if (stopped) {
+          console.log("Stream stopped by user.");
+        }
+        stopFlags.delete(currentConversationId)
       }
     }
   });

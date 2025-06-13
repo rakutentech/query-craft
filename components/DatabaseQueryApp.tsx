@@ -59,6 +59,7 @@ import {AI_PROVIDER_ERROR} from "@/constants/error";
 import { Box, Flex, Text } from "@radix-ui/themes";
 import SqlResultPanel from './SqlResultPanel';
 import ResizableSplitter from './ResizableSplitter';
+import { TagCloud } from "@/components/ui/tag-cloud";
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 const ENABLE_OAUTH = process.env.NEXT_PUBLIC_ENABLE_OAUTH;
@@ -155,6 +156,9 @@ export default function DatabaseQueryApp() {
     isMedium: false  // >= 768px (md breakpoint)
   });
   const [panelSplit, setPanelSplit] = useState<number>(50); // Default 50% split
+
+  const [listOfDBTables, setListOfDBTables] = useState<string[]>([]);
+
   const [appLoading, setAppLoading] = useState(true);
   const [recommendations, setRecommendations] = useState<string[]>([]);
   const [showRecommendations, setShowRecommendations] = useState(false);
@@ -191,6 +195,7 @@ export default function DatabaseQueryApp() {
   useEffect(() => {
     if (selectedConnectionId !== null) {
       fetchConversationsByConnection(selectedConnectionId);
+      fetchListOfDBTables();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedConnectionId]);
@@ -255,6 +260,19 @@ export default function DatabaseQueryApp() {
     }
   };
 
+  const fetchListOfDBTables = async () => {
+    try {
+      const response = await fetch(`${BASE_PATH}/api/db-tables/${selectedConnectionId}`);
+      if (!response.ok) {
+        throw new Error("Failed to fetch database tables");
+      }
+      const data = await response.json();
+      setListOfDBTables(data);
+    } catch (error) {
+      console.error("Error fetching database tables:", error);
+    }
+  };
+
   const fetchConversationsByConnection = async (connectionId: number) => {
     // Check cache first
     if (conversationsCache.current.has(connectionId)) {
@@ -291,6 +309,18 @@ export default function DatabaseQueryApp() {
     setSelectedConnectionId(connectionId);
     setConversationId(null);
     setMessages([]);
+  };
+
+  const handleStopStreaming = async () => {
+    setStopStreaming(true);
+    stopStreamingRef.current = true;
+    if (conversationId) {
+      await fetch(`${BASE_PATH}/api/query`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId })
+      });
+    }
   };
 
   const handleSendMessage = async () => {
@@ -337,10 +367,6 @@ export default function DatabaseQueryApp() {
       let systemMessageId = Date.now();
 
       while (!done) {
-        if (stopStreamingRef.current) {
-          reader.cancel();
-          break;
-        }
         const { value, done: readerDone } = await reader.read();
         done = readerDone;
         const chunk = decoder.decode(value, { stream: !done });
@@ -391,7 +417,6 @@ export default function DatabaseQueryApp() {
           } else if (metaReceived) {
             // AI response event (append to content)
             aiContent += event;
-            // Update your UI with aiContent
             setMessages((prev) =>
                 prev.map((msg) =>
                     msg.id === systemMessageId
@@ -457,6 +482,15 @@ export default function DatabaseQueryApp() {
     setLoadingOperation({ type: null, messageId: null });
   };
 
+  const filterHistory = (searchText: string) => {
+    if (!selectedConnectionId) return;
+    const searchTerm = searchText.toLowerCase();
+    const filteredConversations = conversationsCache.current.get(selectedConnectionId)?.filter((conversation) =>
+        conversation.title.toLowerCase().includes(searchTerm)
+    );
+    setCurrentConversation(filteredConversations || []);
+  }
+
   const executeSql = async (sql: string, messageId: number) => {
     setIsStreaming(true);
     setStopStreaming(false);
@@ -496,7 +530,7 @@ export default function DatabaseQueryApp() {
 
         while (!done) {
           if (stopStreamingRef.current) {
-            reader.cancel();
+            await reader.cancel();
             break;
           }
           const { value, done: readerDone } = await reader.read();
@@ -1315,6 +1349,13 @@ export default function DatabaseQueryApp() {
                   </div>
                 </CardHeader>
                 <CardContent className="p-0">
+                  <div className="flex items-center justify-between p-2 border-b border-gray-200">
+                    <Input
+                        placeholder="Search..."
+                        className="border border-gray-300 rounded-md p-1 w-full"
+                        onChange={(e) => filterHistory(e.target.value)}
+                    />
+                  </div>
                   <ScrollArea className="h-[140px] overflow-y-auto">
                     <ul className="divide-y divide-border">
                       {selectedConnectionId &&
@@ -1420,6 +1461,18 @@ export default function DatabaseQueryApp() {
                 <CardContent className="flex-1 overflow-hidden p-4 relative">
                   <ScrollArea className="h-full pr-4">
                     <div className="space-y-4 h-[calc(80vh-65px)]">
+                      {messages.length === 0 && (
+                          <div>
+                            <p className="text-center text-gray-500">
+                              Start a conversation by typing your query.
+                              <br />
+                              Here are the available tables in your database:
+                            </p>
+                            <div className="">
+                              <TagCloud className="mt-4" tags={listOfDBTables} />
+                            </div>
+                          </div>
+                      )}
                       {messages.map(renderMessage)}
                       <div ref={messagesEndRef} />
                     </div>
@@ -1489,10 +1542,7 @@ export default function DatabaseQueryApp() {
                     </Button>
                     {isStreaming && (
                         <Button
-                            onClick={() => {
-                              setStopStreaming(true);
-                              stopStreamingRef.current = true;
-                            }}
+                            onClick={handleStopStreaming}
                             variant="destructive"
                             className="mt-2"
                             size="icon"
