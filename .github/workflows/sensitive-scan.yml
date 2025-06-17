@@ -7,7 +7,6 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-latest
-    environment: pr
     steps:
       - uses: windyinwind/sensitive-scanner-action@v1
         with:
