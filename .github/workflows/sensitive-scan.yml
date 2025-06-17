@@ -7,9 +7,10 @@ on:
 jobs:
   scan:
     runs-on: ubuntu-latest
+    environment: pr
     steps:
       - uses: windyinwind/sensitive-scanner-action@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          sensitive-words-file: '.github/sensitive-words.txt' 
+          custom-patterns: ${{ vars.SENSITIVE_WORDS }}
           fail-on-detection: false
