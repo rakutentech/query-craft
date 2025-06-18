@@ -1236,6 +1236,7 @@ export default function DatabaseQueryApp() {
 
   // Recommendation dropdown keyboard navigation and accessibility
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
+  const [dropdownActive, setDropdownActive] = useState(false); // Track if user is navigating dropdown
 
   // Keyboard navigation for recommendations
   useEffect(() => {
@@ -1250,17 +1251,26 @@ export default function DatabaseQueryApp() {
     if (!showRecommendations || recommendations.length === 0) return;
     if (e.key === 'ArrowDown') {
       e.preventDefault();
+      setDropdownActive(true);
       setHighlightedIndex((prev) => (prev + 1) % recommendations.length);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
+      setDropdownActive(true);
       setHighlightedIndex((prev) => (prev - 1 + recommendations.length) % recommendations.length);
     } else if (e.key === 'Enter') {
-      if (highlightedIndex >= 0 && highlightedIndex < recommendations.length) {
+      if (dropdownActive && highlightedIndex >= 0 && highlightedIndex < recommendations.length) {
         setInputMessage(recommendations[highlightedIndex]);
         setShowRecommendations(false);
+        setDropdownActive(false);
+        e.preventDefault();
+      } else {
+        setDropdownActive(false);
       }
     } else if (e.key === 'Escape') {
       setShowRecommendations(false);
+      setDropdownActive(false);
+    } else {
+      setDropdownActive(false);
     }
   };
 
@@ -1574,15 +1584,23 @@ export default function DatabaseQueryApp() {
                       onChange={(e) => {
                         setInputMessage(e.target.value);
                         setShowRecommendations(true);
+                        setDropdownActive(false);
                       }}
                       placeholder="Type your query..."
                       onFocus={() => setShowRecommendations(true)}
+                      onBlur={() => setDropdownActive(false)}
                       onKeyDown={(e) => {
                         handleRecommendationKeyDown(e);
-                        if (e.key === 'Enter' && !e.shiftKey && (!showRecommendations || highlightedIndex === -1)) {
+                        // Only send if not actively selecting a dropdown item
+                        if (
+                          e.key === 'Enter' &&
+                          !e.shiftKey &&
+                          (!showRecommendations || !dropdownActive || highlightedIndex === -1)
+                        ) {
                           e.preventDefault();
                           handleSendMessage();
                           setShowRecommendations(false);
+                          setDropdownActive(false);
                         }
                       }}
                       className="flex-1 min-h-[30px] max-h-[100px] resize-y"
@@ -1622,6 +1640,7 @@ export default function DatabaseQueryApp() {
                               onMouseDown={() => {
                                 setInputMessage(rec);
                                 setShowRecommendations(false);
+                                setDropdownActive(false);
                               }}
                               onMouseEnter={() => setHighlightedIndex(idx)}
                             >
@@ -1673,8 +1692,8 @@ export default function DatabaseQueryApp() {
                 </CardContent>
               </Card>
             </div>
-
-            {/* Resizable splitter - only shown when SQL result panel is active */}
+            {/* End Chat panel */}
+            {/* SQL Result panel and splitter */}
             {showResultPanel && (
               <ResizableSplitter
                 onResize={handlePanelResize}
@@ -1684,8 +1703,6 @@ export default function DatabaseQueryApp() {
                 className="h-full flex-shrink-0"
               />
             )}
-
-            {/* SQL Result panel */}
             {showResultPanel && (
               <div 
                 style={{ 
@@ -1711,8 +1728,7 @@ export default function DatabaseQueryApp() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm SQL Execution</AlertDialogTitle>
             <AlertDialogDescription>
-              This SQL query may modify the database. Are you sure you want to
-              proceed?
+              This SQL query may modify the database. Are you sure you want to proceed?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
