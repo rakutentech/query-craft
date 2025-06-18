@@ -1,0 +1,15 @@
+name: Sensitive Content Scanner
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: windyinwind/sensitive-scanner-action@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          custom-patterns: ${{ vars.SENSITIVE_WORDS }}
+          fail-on-detection: false

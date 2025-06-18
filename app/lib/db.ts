@@ -45,52 +45,7 @@ export const databaseConfig: DatabaseConfig = {
 // Connection pool caches
 const mysqlStreamingPools: ConnectionPoolCache = {};
 const pgPools: ConnectionPoolCache = {};
-const mariadbPools: ConnectionPoolCache = {};
-
-// Cleanup old connection pools periodically
-const POOL_TTL = 1000 * 60 * 30; // 30 minutes
-setInterval(() => {
-  const now = Date.now();
-  
-  // Clean up MySQL streaming pools
-  Object.keys(mysqlStreamingPools).forEach(key => {
-    if (now - mysqlStreamingPools[key].lastUsed > POOL_TTL) {
-      console.log(`Closing unused MySQL streaming pool: ${key}`);
-      try {
-        mysqlStreamingPools[key].pool.end();
-      } catch (err) {
-        console.error(`Error closing MySQL streaming pool: ${err}`);
-      }
-      delete mysqlStreamingPools[key];
-    }
-  });
-  
-  // Clean up PostgreSQL pools
-  Object.keys(pgPools).forEach(key => {
-    if (now - pgPools[key].lastUsed > POOL_TTL) {
-      console.log(`Closing unused PostgreSQL pool: ${key}`);
-      try {
-        pgPools[key].pool.end();
-      } catch (err) {
-        console.error(`Error closing PostgreSQL pool: ${err}`);
-      }
-      delete pgPools[key];
-    }
-  });
-  
-  // Clean up MariaDB pools
-  Object.keys(mariadbPools).forEach(key => {
-    if (now - mariadbPools[key].lastUsed > POOL_TTL) {
-      console.log(`Closing unused MariaDB pool: ${key}`);
-      try {
-        mariadbPools[key].pool.end();
-      } catch (err) {
-        console.error(`Error closing MariaDB pool: ${err}`);
-      }
-      delete mariadbPools[key];
-    }
-  });
-}, POOL_TTL);
+const mariadbPools: ConnectionPoolCache = {}
 
 export interface Message {
   id: number;
@@ -155,36 +110,90 @@ const execPromise = util.promisify(exec);
 let sqliteDb: SQLiteDatabase | null = null;
 let mysqlPool: mysql.Pool | null = null;
 
-export async function getDb() {
-  if (databaseConfig.type === 'mysql') {
-    // Reuse existing MySQL pool if it exists
-    if (!mysqlPool) {
-      mysqlPool = mysql.createPool({
-        host: databaseConfig.mysql?.host || 'localhost',
-        port: databaseConfig.mysql?.port || 3306,
-        user: databaseConfig.mysql?.user || '',
-        password: databaseConfig.mysql?.password || '',
-        database: databaseConfig.mysql?.database || '',
-        waitForConnections: true,
-        connectionLimit: 25, // Increased connection limit
-        queueLimit: 0
-      });
-      
-      // Test the connection to make sure it works
-      try {
-        const [rows] = await mysqlPool.execute('SELECT 1');
-        console.log('MySQL connection pool initialized successfully');
-      } catch (error) {
-        console.error('Failed to initialize MySQL connection pool:', error);
-        mysqlPool = null;
-        throw error;
-      }
+// Add logging utility
+const logDbOperation = (operation: string, details: any) => {
+  console.log(`[DB Operation] ${operation}:`, {
+    timestamp: new Date().toISOString(),
+    ...details
+  });
+};
+
+// Add error logging utility
+const logDbError = (operation: string, error: any) => {
+  console.error(`[DB Error] ${operation}:`, {
+    timestamp: new Date().toISOString(),
+    error: error instanceof Error ? error.message : error,
+    stack: error instanceof Error ? error.stack : undefined
+  });
+};
+
+// Improve connection pool management
+const cleanupStalePools = () => {
+  const now = Date.now();
+  const STALE_THRESHOLD = 30 * 60 * 1000; // 30 minutes
+
+  Object.entries(mysqlStreamingPools).forEach(([key, pool]) => {
+    if (now - pool.lastUsed > STALE_THRESHOLD) {
+      logDbOperation('Cleaning up stale MySQL pool', { key });
+      pool.pool.end();
+      delete mysqlStreamingPools[key];
     }
-    return mysqlPool;
-  } else {
-    if (!sqliteDb) {
-      try {
+  });
+
+  Object.entries(pgPools).forEach(([key, pool]) => {
+    if (now - pool.lastUsed > STALE_THRESHOLD) {
+      logDbOperation('Cleaning up stale PostgreSQL pool', { key });
+      pool.pool.end();
+      delete pgPools[key];
+    }
+  });
+
+  Object.entries(mariadbPools).forEach(([key, pool]) => {
+    if (now - pool.lastUsed > STALE_THRESHOLD) {
+      logDbOperation('Cleaning up stale MariaDB pool', { key });
+      pool.pool.end();
+      delete mariadbPools[key];
+    }
+  });
+};
+
+// Run cleanup every 5 minutes
+setInterval(cleanupStalePools, 5 * 60 * 1000);
+
+// Improve getDb function with better error handling
+export async function getDb() {
+  try {
+    if (databaseConfig.type === 'mysql') {
+      if (!mysqlPool) {
+        logDbOperation('Initializing MySQL pool', {
+          host: databaseConfig.mysql?.host,
+          port: databaseConfig.mysql?.port,
+          database: databaseConfig.mysql?.database
+        });
+
+        mysqlPool = mysql.createPool({
+          host: databaseConfig.mysql?.host || 'localhost',
+          port: databaseConfig.mysql?.port || 3306,
+          user: databaseConfig.mysql?.user || '',
+          password: databaseConfig.mysql?.password || '',
+          database: databaseConfig.mysql?.database || '',
+          waitForConnections: true,
+          connectionLimit: 25,
+          queueLimit: 0,
+          enableKeepAlive: true,
+          keepAliveInitialDelay: 0
+        });
+
+        // Test the connection
+        const [rows] = await mysqlPool.execute('SELECT 1');
+        logDbOperation('MySQL pool initialized successfully', { rows });
+      }
+      return mysqlPool;
+    } else {
+      if (!sqliteDb) {
         const dbPath = path.join(process.cwd(), 'query_craft.sqlite');
+        logDbOperation('Initializing SQLite database', { path: dbPath });
+
         sqliteDb = await open({
           filename: dbPath,
           driver: sqlite3.Database
@@ -192,16 +201,13 @@ export async function getDb() {
 
         // Test the connection
         await sqliteDb.get('SELECT 1');
-      } catch (err) {
-        const error = err as Error;
-        console.error('Failed to connect to SQLite database:', {
-          error: error.message,
-          path: path.join(process.cwd(), 'query_craft.sqlite')
-        });
-        throw new Error(`SQLite connection failed: ${error.message}`);
+        logDbOperation('SQLite database initialized successfully', { path: dbPath });
       }
+      return sqliteDb;
     }
-    return sqliteDb;
+  } catch (error) {
+    logDbError('Database initialization failed', error);
+    throw new Error(`Database initialization failed: ${(error as Error).message}`);
   }
 }
 
@@ -259,7 +265,7 @@ export async function getConversationMessages(
       [conversationId]
     );
   }
-}getConversationMessages
+}
 
 export async function getConversationByConnectionId(
   connectionId: number
@@ -618,25 +624,32 @@ export async function testDatabaseConnection(connection: DatabaseConnection): Pr
   }
 }
 
+// Improve executeQuery function with better error handling and logging
 export async function executeQuery(sql: string, connectionId: number, userId: string): Promise<any[]> {
   const connection = await getUserConnectionById(connectionId, userId);
   
   if (!connection) {
-    throw new Error(`Database connection not found for id: ${connectionId}`);
+    const error = new Error(`Database connection not found for id: ${connectionId}`);
+    logDbError('Execute query failed', error);
+    throw error;
   }
 
   let result: any[];
   let pool: any;
-  
-  // Create a unique key for this connection
   const connectionKey = `${connection.dbHost}:${connection.dbPort}:${connection.dbUsername}:${connection.dbName}`;
   
   try {
+    logDbOperation('Executing query', {
+      connectionId,
+      userId,
+      driver: connection.dbDriver,
+      sql: sql.substring(0, 100) + (sql.length > 100 ? '...' : '') // Log truncated SQL for security
+    });
+
     switch (connection.dbDriver) {
       case "mysql":
-        // Reuse or create MySQL pool
         if (!mysqlStreamingPools[connectionKey]) {
-          console.log(`Creating new MySQL pool for ${connectionKey}`);
+          logDbOperation('Creating new MySQL pool', { connectionKey });
           mysqlStreamingPools[connectionKey] = {
             pool: mysqlStreaming.createPool({
               host: connection.dbHost,
@@ -644,18 +657,15 @@ export async function executeQuery(sql: string, connectionId: number, userId: st
               user: connection.dbUsername,
               password: connection.dbPassword,
               database: connection.dbName,
-              connectionLimit: 15
+              connectionLimit: 15,
+              enableKeepAlive: true,
+              keepAliveInitialDelay: 0
             }),
             lastUsed: Date.now()
           };
-        } else {
-          console.log(`Reusing MySQL pool for ${connectionKey}`);
-          mysqlStreamingPools[connectionKey].lastUsed = Date.now();
         }
         
         pool = mysqlStreamingPools[connectionKey].pool;
-        
-        // Get a connection from the pool
         const mysqlConn = await new Promise<any>((resolve, reject) => {
           pool.getConnection((err: any, conn: any) => {
             if (err) reject(err);
@@ -671,15 +681,19 @@ export async function executeQuery(sql: string, connectionId: number, userId: st
             });
           });
           result = rows;
+          logDbOperation('MySQL query executed successfully', {
+            connectionId,
+            rowCount: result.length
+          });
         } finally {
-          mysqlConn.release(); // Release the connection back to the pool
+          mysqlConn.release();
         }
         break;
         
       case "postgresql":
         // Reuse or create PostgreSQL pool
         if (!pgPools[connectionKey]) {
-          console.log(`Creating new PostgreSQL pool for ${connectionKey}`);
+          logDbOperation('Creating new PostgreSQL pool', { connectionKey });
           pgPools[connectionKey] = {
             pool: new pg.Pool({
               host: connection.dbHost,
@@ -692,7 +706,7 @@ export async function executeQuery(sql: string, connectionId: number, userId: st
             lastUsed: Date.now()
           };
         } else {
-          console.log(`Reusing PostgreSQL pool for ${connectionKey}`);
+          logDbOperation('Reusing PostgreSQL pool', { connectionKey });
           pgPools[connectionKey].lastUsed = Date.now();
         }
         
@@ -704,7 +718,7 @@ export async function executeQuery(sql: string, connectionId: number, userId: st
       case "mariadb":
         // Reuse or create MariaDB pool
         if (!mariadbPools[connectionKey]) {
-          console.log(`Creating new MariaDB pool for ${connectionKey}`);
+          logDbOperation('Creating new MariaDB pool', { connectionKey });
           mariadbPools[connectionKey] = {
             pool: mariadb.createPool({
               host: connection.dbHost,
@@ -717,7 +731,7 @@ export async function executeQuery(sql: string, connectionId: number, userId: st
             lastUsed: Date.now()
           };
         } else {
-          console.log(`Reusing MariaDB pool for ${connectionKey}`);
+          logDbOperation('Reusing MariaDB pool', { connectionKey });
           mariadbPools[connectionKey].lastUsed = Date.now();
         }
         
@@ -729,7 +743,12 @@ export async function executeQuery(sql: string, connectionId: number, userId: st
         throw new Error(`Unsupported database driver: ${connection.dbDriver}`);
     }
   } catch (error) {
-    console.error("Error executing query:", error);
+    logDbError('Query execution failed', {
+      error,
+      connectionId,
+      userId,
+      driver: connection.dbDriver
+    });
     throw new Error(`Query execution failed: ${(error as Error).message}`);
   }
 
@@ -1204,20 +1223,36 @@ export async function storeUser(user: User): Promise<void> {
 export async function generateShareToken(messageId: number): Promise<string> {
   const db = await getDb();
   const shareToken = crypto.randomBytes(16).toString('hex');
+  let result;
 
-  if (databaseConfig.type === 'mysql') {
-    await (db as any).execute(
-      'UPDATE messages SET share_token = ? WHERE id = ?',
-      [shareToken, messageId]
-    );
-  } else {
-    await (db as any).run(
-      'UPDATE messages SET share_token = ? WHERE id = ?',
-      [shareToken, messageId]
-    );
+  try {
+    if (databaseConfig.type === 'mysql') {
+      result = await (db as mysql.Pool).execute(
+        'UPDATE messages SET share_token = ? WHERE id = ?',
+        [shareToken, messageId]
+      );
+      // MySQL: result.affectedRows
+      if (!result || (result as any).affectedRows === 0) {
+        console.error(`generateShareToken: No message updated for id ${messageId}`);
+        throw new Error('Failed to update share token for message');
+      }
+      return shareToken;
+    } else {
+      result = await (db as any).run(
+        'UPDATE messages SET share_token = ? WHERE id = ?',
+        [shareToken, messageId]
+      );
+      // SQLite: result.changes
+      if (!result || (result.changes ?? 0) === 0) {
+        console.error(`generateShareToken: No message updated for id ${messageId}`);
+        throw new Error('Failed to update share token for message');
+      }
+    }
+    return shareToken;
+  } catch (err) {
+    console.error('generateShareToken error:', err);
+    throw new Error('Failed to generate share token');
   }
-
-  return shareToken;
 }
 
 export async function getSharedMessage(token: string): Promise<{ message: Message; canEdit: boolean } | null> {
@@ -1225,20 +1260,21 @@ export async function getSharedMessage(token: string): Promise<{ message: Messag
 
   try {
     if (databaseConfig.type === 'mysql') {
-      const [message] = await (db as any).execute(
+      const [rows] = await (db as mysql.Pool).execute(
         `SELECT m.*, c.connectionId 
          FROM messages m 
          JOIN conversations c ON m.conversationId = c.id 
          WHERE m.share_token = ?`,
         [token]
       );
-      if (!message || message.length === 0) {
+      const arr = rows as any[];
+      if (!arr || arr.length === 0) {
         return null;
       }
       return { 
         message: {
-          ...message[0],
-          connectionId: message[0].connectionId
+          ...arr[0],
+          connectionId: arr[0].connectionId
         }, 
         canEdit: false 
       };
@@ -1272,10 +1308,16 @@ export async function updateSharedMessage(token: string, content: string): Promi
 
   try {
     if (databaseConfig.type === 'mysql') {
-      await (db as any).execute(
+      const result = await (db as mysql.Pool).execute(
         'UPDATE messages SET content = ? WHERE share_token = ?',
         [content, token]
       );
+      // MySQL: result.affectedRows 
+      if (!result || (result as any).affectedRows === 0) {
+        console.error(`updateSharedMessage: No message updated for token ${token}`);
+        throw new Error('Failed to update shared message');
+      }
+
     } else {
       await (db as any).run(
         'UPDATE messages SET content = ? WHERE share_token = ?',
@@ -1376,62 +1418,42 @@ export async function updateDatabaseConnection(connection: DatabaseConnection, u
   }
 }
 
-// Add cleanup for graceful shutdown
-process.on('SIGINT', async () => {
-  console.log('Received SIGINT. Closing all database connections...');
-  await cleanupAllPools();
-  process.exit(0);
-});
-
-process.on('SIGTERM', async () => {
-  console.log('Received SIGTERM. Closing all database connections...');
-  await cleanupAllPools();
-  process.exit(0);
-});
-
-// Function to close all database pools
-async function cleanupAllPools() {
-  console.log('Cleaning up all database connection pools...');
-  
-  // Close MySQL app pool
-  if (mysqlPool) {
-    try {
-      console.log('Closing main MySQL pool');
-      await mysqlPool.end();
-    } catch (err) {
-      console.error('Error closing main MySQL pool:', err);
+// Get recent unique user messages for recommendations
+export async function getUserMessageRecommendations(userId: string, limit: string = '10'): Promise<string[]> {
+  const db = await getDb();
+  if (databaseConfig.type === 'mysql') {
+    // MySQL: Use GROUP BY to ensure distinct content
+    const [rows] = await (db as mysql.Pool).execute(
+      `SELECT DISTINCT m.content 
+       FROM messages m 
+       JOIN conversations c ON m.conversationId = c.id 
+       WHERE m.sender = 'user' 
+       AND c.user_id = ? 
+       GROUP BY m.content 
+       ORDER BY MAX(m.timestamp) DESC 
+       LIMIT ?`,
+      [userId, limit]
+    );
+    const arr = rows as any[];
+    if (!arr || arr.length === 0) {
+      return [];
     }
-  }
-  
-  // Close MySQL streaming pools
-  for (const key of Object.keys(mysqlStreamingPools)) {
-    try {
-      console.log(`Closing MySQL streaming pool: ${key}`);
-      await mysqlStreamingPools[key].pool.end();
-    } catch (err) {
-      console.error(`Error closing MySQL streaming pool ${key}:`, err);
+    return arr.map((row) => row.content);
+  } else {
+    // SQLite: Use GROUP BY to ensure distinct content
+    const rows = await (db as SQLiteDatabase).all<{ content: string }[]>(
+      `SELECT DISTINCT m.content
+       FROM messages m
+       JOIN conversations c ON m.conversationId = c.id
+       WHERE m.sender = 'user' AND c.user_id = ?
+       GROUP BY m.content
+       ORDER BY MAX(m.timestamp) DESC
+       LIMIT ?`,
+      [userId, limit]
+    );
+    if (!rows || rows.length === 0) {
+      return [];
     }
+    return rows.map(row => row.content);
   }
-  
-  // Close PostgreSQL pools
-  for (const key of Object.keys(pgPools)) {
-    try {
-      console.log(`Closing PostgreSQL pool: ${key}`);
-      await pgPools[key].pool.end();
-    } catch (err) {
-      console.error(`Error closing PostgreSQL pool ${key}:`, err);
-    }
-  }
-  
-  // Close MariaDB pools
-  for (const key of Object.keys(mariadbPools)) {
-    try {
-      console.log(`Closing MariaDB pool: ${key}`);
-      await mariadbPools[key].pool.end();
-    } catch (err) {
-      console.error(`Error closing MariaDB pool ${key}:`, err);
-    }
-  }
-  
-  console.log('All database connection pools closed');
 }
