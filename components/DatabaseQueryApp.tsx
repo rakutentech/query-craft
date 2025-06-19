@@ -495,6 +495,7 @@ export default function DatabaseQueryApp() {
     setIsStreaming(true);
     setStopStreaming(false);
     stopStreamingRef.current = false;
+    leftPanelClosedForStreamingRef.current = false; // Reset for each new execution
 
     if (!selectedConnectionId) {
       setMessages((prev) =>
@@ -544,20 +545,21 @@ export default function DatabaseQueryApp() {
                 const row = JSON.parse(line);
                 rows.push(row);
                 setMessages((prev) =>
-                    prev.map((msg) =>
-                        msg.id === messageId
-                            ? { ...msg, result: [...rows] }
-                            : msg
-                    )
+                  prev.map((msg) =>
+                    msg.id === messageId
+                      ? { ...msg, result: [...rows] }
+                      : msg
+                  )
                 );
-                // Also update the active query result for the panel
                 setActiveQueryResult({
                   result: [...rows],
                   hasError: false
                 });
-                if (!showResultPanel) {
+                // Only close left panel once per streaming session
+                if (!leftPanelClosedForStreamingRef.current) {
                   setShowResultPanel(true);
                   setShowLeftPanel(false);
+                  leftPanelClosedForStreamingRef.current = true;
                 }
               }
             }
@@ -571,20 +573,21 @@ export default function DatabaseQueryApp() {
           const row = JSON.parse(buffer);
           rows.push(row);
           setMessages((prev) =>
-              prev.map((msg) =>
-                  msg.id === messageId
-                      ? { ...msg, result: [...rows] }
-                      : msg
-              )
+            prev.map((msg) =>
+              msg.id === messageId
+                ? { ...msg, result: [...rows] }
+                : msg
+            )
           );
-          // Update the panel result one last time
           setActiveQueryResult({
             result: [...rows],
             hasError: false
           });
-          // Make sure we show the result panel and always hide the left panel
-          setShowResultPanel(true);
-          setShowLeftPanel(false);
+          if (!leftPanelClosedForStreamingRef.current) {
+            setShowResultPanel(true);
+            setShowLeftPanel(false);
+            leftPanelClosedForStreamingRef.current = true;
+          }
         }
       } else {
         // fallback for non-streaming
@@ -607,7 +610,7 @@ export default function DatabaseQueryApp() {
           hasError: false
         });
         setShowResultPanel(true);
-        setShowLeftPanel(false); // Always hide left panel when showing results
+        setShowLeftPanel(false); // Always hide left panel when showing results (non-streaming)
       }
     } catch (error) {
       console.error("Error running SQL:", error);
@@ -1237,6 +1240,7 @@ export default function DatabaseQueryApp() {
   // Recommendation dropdown keyboard navigation and accessibility
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const [dropdownActive, setDropdownActive] = useState(false); // Track if user is navigating dropdown
+  const leftPanelClosedForStreamingRef = useRef(false);
 
   // Keyboard navigation for recommendations
   useEffect(() => {
