@@ -44,6 +44,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
+  Code
 } from "lucide-react";
 import { format, parseISO, addHours } from "date-fns";
 import ReactMarkdown from 'react-markdown';
@@ -60,6 +61,7 @@ import { Box, Flex, Text } from "@radix-ui/themes";
 import SqlResultPanel from './SqlResultPanel';
 import ResizableSplitter from './ResizableSplitter';
 import { TagCloud } from "@/components/ui/tag-cloud";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 const ENABLE_OAUTH = process.env.NEXT_PUBLIC_ENABLE_OAUTH;
@@ -163,6 +165,11 @@ export default function DatabaseQueryApp() {
   const [recommendations, setRecommendations] = useState<string[]>([]);
   const [showRecommendations, setShowRecommendations] = useState(false);
   const recommendationsRef = useRef<HTMLDivElement>(null);
+
+  const [showEmbedDialog, setShowEmbedDialog] = useState(false);
+  const [embedCode, setEmbedCode] = useState("");
+  const [embedUrl, setEmbedUrl] = useState("");
+  const [embedLoading, setEmbedLoading] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -759,6 +766,26 @@ export default function DatabaseQueryApp() {
     }
   };
 
+  const handleEmbedMessage = async (messageId: number) => {
+    setEmbedLoading(true);
+    try {
+      // First, get the share token (reuse share endpoint)
+      const response = await fetch(`/api/messages/${messageId}/share`, { method: 'POST' });
+      if (!response.ok) throw new Error('Failed to generate share token');
+      const data = await response.json();
+      const token = data.token;
+      // Construct embed URL
+      const url = `${window.location.origin}/api/messages/${messageId}/embed?token=${token}`;
+      setEmbedUrl(url);
+      setEmbedCode(`<iframe src=\"${url}\" width=\"600\" height=\"220\" frameborder=\"0\" allowfullscreen></iframe>`);
+      setShowEmbedDialog(true);
+    } catch (err) {
+      // Optionally show toast
+    } finally {
+      setEmbedLoading(false);
+    }
+  };
+
   const renderMessage = (message: Message) => {
     const isAIProviderError = message.content.startsWith(AI_PROVIDER_ERROR);
 
@@ -1040,13 +1067,22 @@ export default function DatabaseQueryApp() {
             <p className="text-xs mt-2 opacity-70">
               {formatJapanTime(message.timestamp)}
             </p>
-            <div className="mt-2 flex justify-end">
+            <div className="mt-2 flex justify-end gap-2">
               <Button
                 variant="ghost"
                 size="icon"
                 onClick={() => handleShareMessage(message.id)}
               >
                 <Share2 className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => handleEmbedMessage(message.id)}
+                disabled={embedLoading}
+                aria-label="Embed message"
+              >
+                <Code className="w-4 h-4" />
               </Button>
             </div>
           </div>
@@ -1745,6 +1781,47 @@ export default function DatabaseQueryApp() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={showEmbedDialog} onOpenChange={setShowEmbedDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Embed This Message</DialogTitle>
+            <DialogDescription>
+              Copy and paste this iframe code to embed the message in your website or blog.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="mb-2">
+            <label className="block text-xs font-semibold mb-1">Embed Code</label>
+            <Textarea
+              value={embedCode}
+              readOnly
+              className="font-mono text-xs bg-gray-100 dark:bg-gray-900"
+              rows={3}
+              onFocus={e => e.target.select()}
+            />
+            <Button
+              className="mt-2"
+              size="sm"
+              onClick={() => {
+                navigator.clipboard.writeText(embedCode);
+              }}
+            >
+              Copy Embed Code
+            </Button>
+          </div>
+          <div className="mt-4">
+            <label className="block text-xs font-semibold mb-1">Preview</label>
+            <iframe
+              src={embedUrl}
+              width="100%"
+              height="220"
+              frameBorder="0"
+              style={{ borderRadius: 8, background: '#fff' }}
+              title="Embedded Message Preview"
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 }

@@ -27,6 +27,17 @@ export async function middleware(request: NextRequest) {
 
   // Check session for API routes
   if (request.nextUrl.pathname.startsWith('/api')) {
+    // Allow access /embed route without authentication
+    if (request.nextUrl.pathname.startsWith('/api/messages/') && request.nextUrl.pathname.endsWith('/embed')) {
+      const searchParams = request.nextUrl.searchParams;
+      const tokenParam = searchParams.get('token');
+      if (tokenParam) {
+        // If token is provided, allow access to embed route
+        return NextResponse.next();
+      }
+    }
+    // For other API routes, check if token is present
+    // If token is not present, return unauthorized
     if (!token?.sub) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
