@@ -170,6 +170,7 @@ export default function DatabaseQueryApp() {
   const [embedCode, setEmbedCode] = useState("");
   const [embedUrl, setEmbedUrl] = useState("");
   const [embedLoading, setEmbedLoading] = useState(false);
+  const [embedCopied, setEmbedCopied] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -1804,10 +1805,15 @@ export default function DatabaseQueryApp() {
               size="sm"
               onClick={() => {
                 navigator.clipboard.writeText(embedCode);
+                setEmbedCopied(true);
+                setTimeout(() => setEmbedCopied(false), 2000);
               }}
             >
               Copy Embed Code
             </Button>
+            {embedCopied && (
+              <span className="ml-2 text-green-600 text-xs font-medium">Copied!</span>
+            )}
           </div>
           <div className="mt-4">
             <label className="block text-xs font-semibold mb-1">Preview</label>
