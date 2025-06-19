@@ -11,5 +11,5 @@ jobs:
       - uses: windyinwind/sensitive-scanner-action@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          custom-patterns: ${{ vars.SENSITIVE_WORDS }}
+          custom-patterns: ${{ secrets.SENSITIVE_WORDS }}
           fail-on-detection: false
