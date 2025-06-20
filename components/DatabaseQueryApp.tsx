@@ -6,7 +6,7 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Spinner } from "@radix-ui/themes";
 import {
@@ -62,6 +62,11 @@ import SqlResultPanel from './SqlResultPanel';
 import ResizableSplitter from './ResizableSplitter';
 import { TagCloud } from "@/components/ui/tag-cloud";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
+import { NoDatabaseAlert } from "./NoDatabaseAlert";
+import { DatabaseSidebar } from "./DatabaseSidebar";
+import { HistorySidebar } from "./HistorySidebar";
+import { ChatHeader } from "./ChatHeader";
+import { ChatInput } from "./ChatInput";
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 const ENABLE_OAUTH = process.env.NEXT_PUBLIC_ENABLE_OAUTH;
@@ -1025,10 +1030,9 @@ export default function DatabaseQueryApp() {
             <div className="flex items-center space-x-2">
               <Avatar className="w-8 h-8">
                 {session?.user?.image ? (
-                  <img
+                  <AvatarImage
                     src={session.user.image}
                     alt={session.user.name || 'User avatar'}
-                    className="w-full h-full object-cover"
                   />
                 ) : (
                   <AvatarFallback className="bg-primary/20">
@@ -1330,249 +1334,41 @@ export default function DatabaseQueryApp() {
   return (
     <Box className="min-h-screen">
       <div className="container mx-auto py-2 px-2">
-        <div className="flex justify-between items-center pb-2">
-          <div className="flex items-center">
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              onClick={toggleLeftPanel}
-              className="mr-2 "
-              aria-label={showLeftPanel ? "Hide sidebar" : "Show sidebar"}
-            >
-              {showLeftPanel ? <ChevronLeft className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-            </Button>
-            <h1 className="text-2xl items-center font-bold p-2">
-              Chat
-            </h1>
-          </div>
-          <div className="flex items-center space-x-4">
-            {showAuth && (
-              session ? (
-                <div className="flex items-center space-x-2">
-                  <Avatar className="w-8 h-8">
-                    {session.user?.image ? (
-                      <img
-                        src={session.user.image}
-                        alt={session.user?.name || 'User avatar'}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <AvatarFallback>
-                        {session.user?.name?.charAt(0) || 'U'}
-                      </AvatarFallback>
-                    )}
-                  </Avatar>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-medium">{session.user?.name}</span>
-                    <span className="text-xs text-gray-500 dark:text-gray-400">{session.user?.email}</span>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => signOut()}
-                  >
-                    Sign Out
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => signIn('github')}
-                >
-                  Sign In
-                </Button>
-              )
-            )}
-          </div>
-        </div>
-
+        <ChatHeader
+          showLeftPanel={showLeftPanel}
+          toggleLeftPanel={toggleLeftPanel}
+          showAuth={showAuth}
+          session={session}
+          signOut={signOut}
+          signIn={signIn}
+        />
         <div className={`flex flex-col lg:flex-row space-y-4 lg:space-y-0 lg:space-x-4 relative`}>
           {/* Left panel (databases and history) - hidden when SQL result panel is */}
           {showLeftPanel && (
             <div className="w-full lg:w-1/5 lg:min-w-[220px] xl:min-w-[250px] bg-white dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent">
-              <Card className="mb-2 h-[calc(100vh-350px)] flex flex-col bg-card border border-border shadow-md">
-                <CardHeader className="border-b border-border py-2">
-                  <div className="flex justify-between items-center">
-                    <h2 className="text-lg font-semibold">
-                      Databases
-                    </h2>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="flex flex-col h-full">
-                    {uniqueTags.length > 0 && (
-                      <div className="mb-2 mt-2 px-2">
-                        <div className="text-xs font-semibold text-muted-foreground dark:text-muted-foreground mb-2">Filter by Tags</div>
-                        <div className="flex flex-wrap gap-1 overflow-y-auto">
-                          <Button
-                            variant={!selectedTag ? "default" : "outline"}
-                            size="sm"
-                            className={`px-2 py-1 text-xs ${
-                              !selectedTag ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "hover:border-primary/50 dark:hover:border-primary/70"
-                            }`}
-                            onClick={() => handleTagSelect(null)}
-                          >
-                            All
-                          </Button>
-                          {uniqueTags.map(tag => (
-                            <Button
-                              key={tag}
-                              variant={selectedTag === tag ? "default" : "outline"}
-                              size="sm"
-                              className={`px-2 py-1 text-xs ${
-                                selectedTag === tag ? "bg-primary hover:bg-primary/80 text-primary-foreground" : "hover:border-primary/50 dark:hover:border-primary/70"
-                              }`}
-                              onClick={() => handleTagSelect(tag)}
-                            >
-                              {tag}
-                            </Button>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                    
-                    <ScrollArea className="flex-grow overflow-y-auto">
-                      <ul className="divide-y divide-border">
-                        {filteredConnections.map((connection) => (
-                          <li 
-                            key={connection.id}
-                            className={`list-item px-2 py-1 cursor-pointer flex items-center ${
-                              selectedConnectionId === connection.id 
-                              ? "selected font-medium text-foreground dark:text-foreground pl-1" 
-                              : "text-foreground dark:text-foreground"
-                            }`}
-                            onClick={() => handleConnectionSelect(connection.id)}
-                          >
-                            <div className="flex items-center w-full">
-                              <Database className={`h-4 w-4 mr-2 ${
-                                selectedConnectionId === connection.id 
-                                ? "text-primary dark:text-primary" 
-                                : "text-muted-foreground dark:text-muted-foreground"
-                              }`} />
-                              <span className="text-xs font-medium truncate">{connection.projectName}</span>
-                            </div>
-                          </li>
-                        ))}
-                      </ul>
-                    </ScrollArea>
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card className="h-[225px] flex flex-col bg-card border border-border shadow-md">
-                <CardHeader className="border-b border-border py-2">
-                  <div className="flex justify-between items-center">
-                    <h2 className="text-lg font-semibold">
-                      History
-                    </h2>
-                    <Button
-                      onClick={handleNewConversation}
-                      variant="outline"
-                      size="sm"
-                      className="text-primary dark:text-primary border-primary dark:border-primary btn-hover-enhanced px-2 py-1 text-xs"
-                    >
-                      New Chat
-                    </Button>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="flex items-center justify-between p-2 border-b border-gray-100">
-                    <Input
-                      placeholder="Search..."
-                      className="h-7 text-xs border border-gray-300 rounded-md px-2 w-full"
-                      onChange={(e) => filterHistory(e.target.value)}
-                    />
-                  </div>
-                  <ScrollArea className="h-[140px]">
-                    <div className="">
-                      <ul className="divide-y divide-border">
-                        {selectedConnectionId &&
-                          currentConversation?.map((conversation) => (
-                            <li
-                              key={conversation.id}
-                              className={`list-item px-2 py-1 cursor-pointer flex items-center ${
-                                conversation.id === conversationId 
-                                  ? "selected font-medium text-foreground dark:text-foreground" 
-                                  : "text-foreground dark:text-foreground"
-                              }`}
-                            >
-                              <div className="flex items-center justify-between w-full pr-1">
-                                {editingTitleId === conversation.id ? (
-                                  <div className="flex-1 mr-1">
-                                    <Input
-                                      value={editingTitle}
-                                      onChange={(e) => setEditingTitle(e.target.value)}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          handleTitleSave(conversation.id);
-                                        } else if (e.key === 'Escape') {
-                                          setEditingTitleId(null);
-                                          setEditingTitle("");
-                                        }
-                                      }}
-                                      className="h-6 text-xs px-1 bg-background dark:bg-background text-foreground dark:text-foreground"
-                                      autoFocus
-                                    />
-                                  </div>
-                                ) : (
-                                  <div
-                                    className="flex-1 truncate"
-                                    onClick={() => handleConversationClick(conversation)}
-                                  >
-                                    <p className="text-xs font-medium truncate">
-                                      {conversation.title}
-                                    </p>
-                                  </div>
-                                )}
-                                <div className="flex items-center space-x-1 flex-shrink-0">
-                                  {editingTitleId === conversation.id ? (
-                                    <>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => handleTitleSave(conversation.id)}
-                                        className="h-6 w-6 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 btn-hover-enhanced"
-                                      >
-                                        <Check className="h-3 w-3" />
-                                      </Button>
-                                      <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        onClick={() => {
-                                          setEditingTitleId(null);
-                                          setEditingTitle("");
-                                        }}
-                                        className="h-6 w-6 text-muted-foreground dark:text-muted-foreground hover:text-foreground dark:hover:text-foreground btn-hover-enhanced"
-                                      >
-                                        <RotateCcw className="h-3 w-3" />
-                                      </Button>
-                                    </>
-                                  ) : (
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      onClick={(e) => {
-                                        e.stopPropagation();
-                                        handleTitleEdit(conversation);
-                                      }}
-                                      className="h-6 w-6 text-muted-foreground dark:text-muted-foreground hover:text-primary dark:hover:text-primary btn-hover-enhanced"
-                                    >
-                                      <Pencil className="h-3 w-3" />
-                                    </Button>
-                                  )}
-                                </div>
-                              </div>
-                            </li>
-                          ))}
-                      </ul>
-                    </div>
-                  </ScrollArea>
-                </CardContent>
-              </Card>
+              <DatabaseSidebar
+                uniqueTags={uniqueTags}
+                selectedTag={selectedTag}
+                handleTagSelect={handleTagSelect}
+                filteredConnections={filteredConnections}
+                selectedConnectionId={selectedConnectionId}
+                handleConnectionSelect={handleConnectionSelect}
+              />
+              <HistorySidebar
+                currentConversation={currentConversation}
+                conversationId={conversationId}
+                editingTitleId={editingTitleId}
+                editingTitle={editingTitle}
+                handleTitleEdit={handleTitleEdit}
+                handleTitleSave={handleTitleSave}
+                setEditingTitle={setEditingTitle}
+                setEditingTitleId={setEditingTitleId}
+                handleConversationClick={handleConversationClick}
+                handleNewConversation={handleNewConversation}
+                filterHistory={filterHistory}
+              />
             </div>
           )}
-
           {/* Resizable container for chat and SQL panels */}
           <div 
             id="resizable-container" 
@@ -1593,173 +1389,77 @@ export default function DatabaseQueryApp() {
                   <ScrollArea className="h-full pr-4">
                     <div className="space-y-4 h-[calc(80vh-65px)]">
                       {messages.length === 0 && (
-                          <div className="text-center">
-                            <p className="text-muted-foreground dark:text-muted-foreground">
-                              Start a conversation by typing your query.
-                              <br />
-                              Here are the available tables in your database:
-                            </p>
-                            <div className="mt-4">
-                              <TagCloud className="mt-4" tags={listOfDBTables} />
-                            </div>
+                        <div className="text-center">
+                          <p className="text-muted-foreground dark:text-muted-foreground">
+                            Start a conversation by typing your query.<br />Here are the available tables in your database:
+                          </p>
+                          <div className="mt-4">
+                            <TagCloud className="mt-4" tags={listOfDBTables} />
                           </div>
+                        </div>
                       )}
                       {messages.map(renderMessage)}
                       <div ref={messagesEndRef} />
                     </div>
                     <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={scrollToBottom}
-                        aria-label="Scroll to Bottom"
-                        className="absolute bottom-0 right-4 z-10 shadow-lg"
+                      variant="outline"
+                      size="sm"
+                      onClick={scrollToBottom}
+                      aria-label="Scroll to Bottom"
+                      className="absolute bottom-0 right-4 z-10 shadow-lg"
                     >
                       <ArrowDown className="w-4 h-4 mr-1" />
                     </Button>
                   </ScrollArea>
                 </CardContent>
                 <CardContent className="p-3 border-t border-border bg-secondary dark:bg-secondary rounded-b-lg">
-                  <div className="flex space-x-2 relative" ref={recommendationsRef}>
-                    <Textarea
-                      value={inputMessage}
-                      onChange={(e) => {
-                        setInputMessage(e.target.value);
-                        setShowRecommendations(true);
-                        setDropdownActive(false);
-                      }}
-                      placeholder="Type your query..."
-                      onFocus={() => setShowRecommendations(true)}
-                      onBlur={() => setDropdownActive(false)}
-                      onKeyDown={(e) => {
-                        handleRecommendationKeyDown(e);
-                        // Only send if not actively selecting a dropdown item
-                        if (
-                          e.key === 'Enter' &&
-                          !e.shiftKey &&
-                          (!showRecommendations || !dropdownActive || highlightedIndex === -1)
-                        ) {
-                          e.preventDefault();
-                          handleSendMessage();
-                          setShowRecommendations(false);
-                          setDropdownActive(false);
-                        }
-                      }}
-                      className="flex-1 min-h-[30px] max-h-[100px] resize-y"
-                      disabled={!selectedConnectionId}
-                      aria-autocomplete="list"
-                      aria-controls={showRecommendations ? 'recommendations-list' : undefined}
-                      aria-activedescendant={highlightedIndex >= 0 ? `recommendation-item-${highlightedIndex}` : undefined}
-                      aria-expanded={showRecommendations}
-                      role="combobox"
-                    />
-                    {showRecommendations && recommendations.length > 0 && (
-                      <ul
-                        id="recommendations-list"
-                        role="listbox"
-                        aria-label="Recent queries"
-                        className="absolute left-0 bottom-full mb-2 w-full bg-background border border-border rounded-lg shadow-lg z-20 max-h-48 overflow-auto transition-all duration-200 ease-in-out"
-                        style={{
-                          boxShadow: '0 4px 16px rgba(0,0,0,0.10)',
-                          animation: 'fadeInDropdown 0.18s cubic-bezier(0.4,0,0.2,1)',
-                        }}
-                      >
-                        {recommendations
-                          .filter((rec) =>
-                            inputMessage.length === 0 || rec.toLowerCase().includes(inputMessage.toLowerCase())
-                          )
-                          .map((rec, idx) => (
-                            <li
-                              key={idx}
-                              id={`recommendation-item-${idx}`}
-                              role="option"
-                              aria-selected={highlightedIndex === idx}
-                              className={`list-item px-3 py-2 cursor-pointer text-sm ${
-                                highlightedIndex === idx
-                                  ? 'selected font-medium text-foreground dark:text-foreground pl-1' 
-                                  : 'text-foreground dark:text-foreground'
-                              }`}
-                              onMouseDown={() => {
-                                setInputMessage(rec);
-                                setShowRecommendations(false);
-                                setDropdownActive(false);
-                              }}
-                              onMouseEnter={() => setHighlightedIndex(idx)}
-                            >
-                              {rec}
-                            </li>
-                          ))}
-                      </ul>
-                    )}
-                    <style jsx global>{`
-                      @keyframes fadeInDropdown {
-                        from { opacity: 0; transform: translateY(8px); }
-                        to { opacity: 1; transform: translateY(0); }
-                      }
-                    `}</style>
-                    <div className="flex flex-col items-end">
-                    <Button
-                      onClick={handleSendMessage}
-                      disabled={isLoading || isStreaming || !selectedConnectionId}
-                      className="bg-primary hover:bg-primary/80 text-primary-foreground"
-                    >
-                      {isLoading ? (
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      ) : (
-                        <Send className="w-4 h-4 mr-2" />
-                      )}
-                      Send
-                    </Button>
-                    {isStreaming && (
-                        <Button
-                            onClick={handleStopStreaming}
-                            variant="destructive"
-                            className="mt-2"
-                            size="icon"
-                            aria-label="Stop Streaming"
-                        >
-                          <Ban className="w-3 h-3" />
-                        </Button>
-                    )}
-                    </div>
-                  </div>
-                  {!selectedConnectionId && (
-                    <Alert variant="destructive" className="mt-4">
-                      <AlertTitle>No database selected</AlertTitle>
-                      <AlertDescription>
-                        Please select a database connection to start querying.
-                      </AlertDescription>
-                    </Alert>
-                  )}
+                  <ChatInput
+                    inputMessage={inputMessage}
+                    setInputMessage={setInputMessage}
+                    handleSendMessage={handleSendMessage}
+                    handleStopStreaming={handleStopStreaming}
+                    isLoading={isLoading}
+                    isStreaming={isStreaming}
+                    selectedConnectionId={selectedConnectionId}
+                    handleRecommendationKeyDown={handleRecommendationKeyDown}
+                    showRecommendations={showRecommendations}
+                    dropdownActive={dropdownActive}
+                    highlightedIndex={highlightedIndex}
+                    recommendations={recommendations}
+                    setShowRecommendations={setShowRecommendations}
+                    setDropdownActive={setDropdownActive}
+                  />
+                  <NoDatabaseAlert show={!selectedConnectionId} />
                 </CardContent>
               </Card>
             </div>
             {/* End Chat panel */}
             {/* SQL Result panel and splitter */}
             {showResultPanel && (
-              <ResizableSplitter
-                onResize={handlePanelResize}
-                initialPosition={panelSplit}
-                minLeftWidth={20}
-                minRightWidth={20}
-                className="h-full flex-shrink-0"
-              />
-            )}
-            {showResultPanel && (
-              <div 
-                style={{ 
-                  width: `${100 - panelSplit}%`,
-                  minWidth: '20%',
-                  maxWidth: '80%',
-                  transition: 'none'
-                }}
-                className="h-full flex-shrink-0"
-              >
-                <SqlResultPanel 
-                  results={activeQueryResult?.result} 
-                  hasError={activeQueryResult?.hasError || false}
-                  onClose={closeResultPanel} 
+              <>
+                <ResizableSplitter
+                  onResize={handlePanelResize}
+                  initialPosition={panelSplit}
+                  minLeftWidth={20}
+                  minRightWidth={20}
+                  className="h-full flex-shrink-0"
                 />
-              </div>
+                <div
+                  style={{
+                    width: `${100 - panelSplit}%`,
+                    minWidth: '20%',
+                    maxWidth: '80%',
+                    transition: 'none'
+                  }}
+                  className="h-full flex-shrink-0"
+                >
+                  <SqlResultPanel
+                    results={activeQueryResult?.result}
+                    hasError={activeQueryResult?.hasError || false}
+                    onClose={closeResultPanel}
+                  />
+                </div>
+              </>
             )}
           </div>
         </div>
