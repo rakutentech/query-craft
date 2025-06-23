@@ -43,12 +43,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           body { font-family: Inter, Arial, sans-serif; background: #f9f9f9; margin: 0; padding: 0; }
           .embed-container { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.07); padding: 1.5em; margin: 1em; max-width: 600px; }
           .embed-sql { background: #222; color: #fff; border-radius: 4px; padding: 0.75em; margin-top: 1em; font-family: monospace; overflow-x: auto; }
+          .embed-link { display: block; margin-top: 18px; text-align: center; font-size: 13px; color: #2563eb; text-decoration: underline; }
         </style>
       </head>
       <body>
         <div class="embed-container">
           <div><strong>Message:</strong></div>
           <div>${message.content ? renderMessageContentToHtml(message.content) : ''}</div>
+          <a class="embed-link" href="/messages/shared/${message.id}?token=${token}" target="_blank" rel="noopener noreferrer">View full conversation in QueryCraft</a>
         </div>
       </body>
       </html>`,
