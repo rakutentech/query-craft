@@ -416,6 +416,7 @@ export async function getDatabaseConnections(userId: string): Promise<DatabaseCo
   }
 }
 
+
 export async function getUserConnectionById(id: number, userId: string): Promise<DatabaseConnection | null> {
   const db = await getDb();
   if (databaseConfig.type === 'mysql') {
@@ -443,6 +444,52 @@ export async function getUserConnectionById(id: number, userId: string): Promise
     const connection = await (db as SQLiteDatabase).get<DatabaseConnection>(
       'SELECT * FROM database_connections WHERE id = ? AND user_id = ?',
       [id, userId]
+    );
+    if (!connection) return null;
+    return {
+      id: connection.id,
+      user_id: connection.user_id,
+      projectName: connection.projectName ?? '',
+      dbDriver: connection.dbDriver ?? '',
+      dbHost: connection.dbHost ?? '',
+      dbPort: connection.dbPort ?? '',
+      dbUsername: connection.dbUsername ?? '',
+      dbPassword: connection.dbPassword ?? '',
+      dbName: connection.dbName ?? '',
+      schema: connection.schema ?? '',
+      created_at: connection.created_at,
+      updated_at: connection.updated_at
+    };
+  }
+}
+
+export async function getConnectionById(id: number): Promise<DatabaseConnection | null> {
+  const db = await getDb();
+  if (databaseConfig.type === 'mysql') {
+    const [rows] = await (db as mysql.Pool).execute(
+      'SELECT * FROM database_connections WHERE id = ?',
+      [id]
+    );
+    const connection = (rows as any[])[0];
+    if (!connection) return null;
+    return {
+      id: connection.id,
+      user_id: connection.user_id,
+      projectName: connection.projectName ?? '',
+      dbDriver: connection.dbDriver ?? '',
+      dbHost: connection.dbHost ?? '',
+      dbPort: connection.dbPort ?? '',
+      dbUsername: connection.dbUsername ?? '',
+      dbPassword: connection.dbPassword ?? '',
+      dbName: connection.dbName ?? '',
+      schema: connection.schema ?? '',
+      created_at: connection.created_at,
+      updated_at: connection.updated_at
+    };
+  } else {
+    const connection = await (db as SQLiteDatabase).get<DatabaseConnection>(
+      'SELECT * FROM database_connections WHERE id = ?',
+      [id]
     );
     if (!connection) return null;
     return {
@@ -625,9 +672,15 @@ export async function testDatabaseConnection(connection: DatabaseConnection): Pr
 }
 
 // Improve executeQuery function with better error handling and logging
-export async function executeQuery(sql: string, connectionId: number, userId: string): Promise<any[]> {
-  const connection = await getUserConnectionById(connectionId, userId);
-  
+export async function executeQuery(sql: string, connectionId: number, userId: string = 'anonymous'): Promise<any[]> {
+  let connection = null;
+  if (userId === 'anonymous') {
+    // For shared token access, we don't check userId
+    logDbOperation('Fetching connection by ID for anonymous user', { connectionId });
+    connection = await getConnectionById(connectionId);
+  } else {
+    connection = await getUserConnectionById(connectionId, userId);
+  }
   if (!connection) {
     const error = new Error(`Database connection not found for id: ${connectionId}`);
     logDbError('Execute query failed', error);
