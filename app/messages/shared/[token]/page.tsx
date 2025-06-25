@@ -39,9 +39,9 @@ export default function SharedMessagePage({ params }: { params: { token: string 
   const [message, setMessage] = useState<SharedMessage | null>(null);
   const [canEdit, setCanEdit] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [editedSql, setEditedSql] = useState<string>('');
+  const [editedSql, setEditedSql] = useState<{[key: string]: string}>({});
   const [isSaving, setIsSaving] = useState(false);
-  const [editingSqlId, setEditingSqlId] = useState<number | null>(null);
+  const [editingSqlId, setEditingSqlId] = useState<string | null>(null);
   const [copySuccessId, setCopySuccessId] = useState<number | null>(null);
   const [loadingOperation, setLoadingOperation] = useState<{ type: string | null, messageId: number | null }>({ 
     type: null, 
@@ -75,10 +75,15 @@ export default function SharedMessagePage({ params }: { params: { token: string 
 
         setMessage(data.message);
         setCanEdit(data.canEdit);
-        setEditedSql(data.message.content.replace(
-          /```sql[\s\S]*?```/,
-          data.message.content.match(/```sql[\s\S]*?```/)![0]
-        ));
+        
+        // Initialize editedSql for all SQL blocks
+        const sqlBlocks = data.message.content.match(/```sql[\s\S]*?```/g) || [];
+        const initialEditedSql: {[key: string]: string} = {};
+        sqlBlocks.forEach((block: string, index: number) => {
+          const sql = block.replace('```sql', '').replace('```', '').trim();
+          initialEditedSql[`editedSql_${index}`] = sql;
+        });
+        setEditedSql(initialEditedSql);
       } catch (error) {
         console.error('Error fetching shared message:', error);
       } finally {
@@ -89,21 +94,36 @@ export default function SharedMessagePage({ params }: { params: { token: string 
     fetchMessage();
   }, [params.token]);
 
-  const handleSqlSave = async () => {
-    if (!message || !editedSql) return;
+  const handleSqlSave = async (sqlIndex: number) => {
+    if (!message || !editedSql[`editedSql_${sqlIndex}`]) return;
 
     setIsSaving(true);
     try {
+      // Split content into parts and rebuild with updated SQL
+      const parts = message.content.split(/(```sql[\s\S]*?```)/);
+      let currentSqlIndex = 0;
+      
+      const updatedParts = parts.map(part => {
+        if (part.startsWith('```sql')) {
+          if (currentSqlIndex === sqlIndex) {
+            const updatedSql = `\`\`\`sql\n${editedSql[`editedSql_${sqlIndex}`]}\n\`\`\``;
+            currentSqlIndex++;
+            return updatedSql;
+          }
+          currentSqlIndex++;
+        }
+        return part;
+      });
+      
+      const updatedContent = updatedParts.join('');
+
       const response = await fetch(`/api/messages/shared/${params.token}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ 
-          content: message.content.replace(
-            /```sql[\s\S]*?```/,
-            `\`\`\`sql\n${editedSql}\n\`\`\``
-          )
+        body: JSON.stringify({
+          content: updatedContent
         }),
       });
 
@@ -111,14 +131,16 @@ export default function SharedMessagePage({ params }: { params: { token: string 
         throw new Error('Failed to save changes');
       }
 
-      setMessage(prev => prev ? { 
-        ...prev, 
-        content: prev.content.replace(
-          /```sql[\s\S]*?```/,
-          `\`\`\`sql\n${editedSql}\n\`\`\``
-        )
+      setMessage(prev => prev ? {
+        ...prev,
+        content: updatedContent
       } : null);
       setEditingSqlId(null);
+      
+      toast({
+        title: "Success",
+        description: "SQL changes saved successfully",
+      });
     } catch (error) {
       console.error('Error saving SQL:', error);
       toast({
@@ -420,11 +442,14 @@ export default function SharedMessagePage({ params }: { params: { token: string 
 
   const renderContent = (content: string) => {
     const parts = content.split(/(```sql[\s\S]*?```)/);
+    let sqlBlockIndex = 0;
     
     return parts.map((part, index) => {
       if (part.startsWith('```sql')) {
         const sql = part.replace('```sql', '').replace('```', '').trim();
-        const isEditing = editingSqlId === message?.id;
+        const currentSqlIndex = sqlBlockIndex;
+        const isEditing = editingSqlId === `sql_${currentSqlIndex}`;
+        sqlBlockIndex++;
 
         return (
           <div key={index} className="my-3 bg-accent/10 dark:bg-accent/20 text-accent-foreground dark:text-accent-foreground p-3 rounded-lg">
@@ -507,8 +532,11 @@ export default function SharedMessagePage({ params }: { params: { token: string 
                               variant="ghost"
                               size="icon"
                               onClick={() => {
-                                setEditingSqlId(message?.id || null);
-                                setEditedSql(sql);
+                                setEditingSqlId(`sql_${currentSqlIndex}`);
+                                setEditedSql(prev => ({
+                                  ...prev,
+                                  [`editedSql_${currentSqlIndex}`]: sql
+                                }));
                               }}
                             >
                               <Edit className="w-4 h-4" />
@@ -527,8 +555,11 @@ export default function SharedMessagePage({ params }: { params: { token: string 
             {isEditing ? (
               <div className="space-y-2">
                 <Textarea
-                  value={editedSql}
-                  onChange={(e) => setEditedSql(e.target.value)}
+                  value={editedSql[`editedSql_${currentSqlIndex}`] || ''}
+                  onChange={(e) => setEditedSql(prev => ({
+                    ...prev,
+                    [`editedSql_${currentSqlIndex}`]: e.target.value
+                  }))}
                   className="min-h-[100px] font-mono bg-background dark:bg-background text-foreground dark:text-foreground border border-input"
                 />
                 <div className="flex justify-end gap-2">
@@ -539,8 +570,8 @@ export default function SharedMessagePage({ params }: { params: { token: string 
                     Cancel
                   </Button>
                   <Button
-                    onClick={handleSqlSave}
-                    disabled={isSaving || editedSql === sql}
+                    onClick={() => handleSqlSave(currentSqlIndex)}
+                    disabled={isSaving || editedSql[`editedSql_${currentSqlIndex}`] === sql}
                   >
                     {isSaving ? (
                       <>

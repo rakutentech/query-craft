@@ -1510,3 +1510,63 @@ export async function getUserMessageRecommendations(userId: string, limit: strin
     return rows.map(row => row.content);
   }
 }
+
+export async function getMessageById(id: number): Promise<Message | null> {
+  const db = await getDb();
+  try {
+    if (databaseConfig.type === 'mysql') {
+      const [rows] = await (db as any).execute(
+        `SELECT * FROM messages WHERE id = ?`,
+        [id]
+      );
+      const arr = rows as any[];
+      if (!arr || arr.length === 0) {
+        return null;
+      }
+      return arr[0] as Message;
+    } else {
+      const message = await (db as any).get(
+        `SELECT * FROM messages WHERE id = ?`,
+        [id]
+      );
+      if (!message) {
+        return null;
+      }
+      return message as Message;
+    }
+  } catch (error) {
+    console.error('Error fetching message by id:', error);
+    throw error;
+  }
+}
+
+// update message content by id
+export async function updateMessageById(id: number, content: string): Promise<void> {
+  const db = await getDb();
+  try {
+    if (databaseConfig.type === 'mysql') {
+      const [result] = await (db as any).execute(
+        `UPDATE messages SET content = ? WHERE id = ?`,
+        [content, id]
+      );
+      // MySQL: result.affectedRows
+      if (!result || (result as any).affectedRows === 0) {
+        console.error(`updateMessageContent: No message updated for id ${id}`);
+        throw new Error('Failed to update message content');
+      }
+    } else {
+      const result = await (db as SQLiteDatabase).run(
+        `UPDATE messages SET content = ? WHERE id = ?`,
+        [content, id]
+      );
+      // SQLite: result.changes
+      if (!result || (result.changes ?? 0) === 0) {
+        console.error(`updateMessageContent: No message updated for id ${id}`);
+        throw new Error('Failed to update message content');
+      }
+    }
+  } catch (error) {
+    console.error('Error updating message content:', error);
+    throw error;
+  }
+}
