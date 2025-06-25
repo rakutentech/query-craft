@@ -58,6 +58,46 @@ export default function SqlResultPanel({ results, onClose, hasError = false }: S
           header: () => <span className="font-medium">{key}</span>,
           cell: info => {
             const value = info.getValue();
+            
+            // Handle JSON columns - detect if value looks like JSON
+            if (typeof value === 'string' && (value.startsWith('{') || value.startsWith('['))) {
+              try {
+                const parsed = JSON.parse(value);
+                const formatted = JSON.stringify(parsed, null, 2);
+                return (
+                  <div className="max-w-xs" title={formatted}>
+                    <details className="cursor-pointer">
+                      <summary className="text-blue-600 dark:text-blue-400 hover:underline">
+                        JSON ({Array.isArray(parsed) ? parsed.length : Object.keys(parsed).length} {Array.isArray(parsed) ? 'items' : 'keys'})
+                      </summary>
+                      <pre className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs overflow-auto max-h-40 whitespace-pre-wrap">
+                        {formatted}
+                      </pre>
+                    </details>
+                  </div>
+                );
+              } catch {
+                // If JSON parsing fails, treat as regular string
+              }
+            }
+            
+            // Handle objects (already parsed JSON from database)
+            if (typeof value === 'object' && value !== null) {
+              const formatted = JSON.stringify(value, null, 2);
+              return (
+                <div className="max-w-xs" title={formatted}>
+                  <details className="cursor-pointer">
+                    <summary className="text-blue-600 dark:text-blue-400 hover:underline">
+                      JSON ({Array.isArray(value) ? value.length : Object.keys(value).length} {Array.isArray(value) ? 'items' : 'keys'})
+                    </summary>
+                    <pre className="mt-2 p-2 bg-gray-100 dark:bg-gray-800 rounded text-xs overflow-auto max-h-40 whitespace-pre-wrap">
+                      {formatted}
+                    </pre>
+                  </details>
+                </div>
+              );
+            }
+            
             // For long text, use text ellipsis but allow hovering to see full content
             if (typeof value === 'string' && value.length > 50) {
               return (
@@ -66,6 +106,7 @@ export default function SqlResultPanel({ results, onClose, hasError = false }: S
                 </div>
               );
             }
+            
             return <span>{String(value ?? '')}</span>;
           },
         })
@@ -103,10 +144,18 @@ export default function SqlResultPanel({ results, onClose, hasError = false }: S
       ...results.map(row => 
         headers.map(header => {
           const value = row[header];
+          
+          // Handle JSON objects/arrays - convert to string
+          if (typeof value === 'object' && value !== null) {
+            const jsonString = JSON.stringify(value);
+            return `"${jsonString.replace(/"/g, '""')}"`;
+          }
+          
           // Handle values that need to be quoted (contain commas, quotes, or newlines)
           if (typeof value === 'string' && (value.includes(',') || value.includes('"') || value.includes('\n'))) {
             return `"${value.replace(/"/g, '""')}"`;
           }
+          
           return value === null || value === undefined ? '' : value;
         }).join(',')
       )

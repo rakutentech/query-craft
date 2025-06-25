@@ -1090,7 +1090,36 @@ export async function executeQueryStream(sql: string, connectionId: number, user
 }
 
 function jsonBigIntReplacer(_key: string, value: any) {
-  return typeof value === 'bigint' ? value.toString() : value;
+  // Handle BigInt values
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+  
+  // Handle Buffer objects (common in MySQL for JSON columns)
+  if (value && typeof value === 'object' && value.constructor && value.constructor.name === 'Buffer') {
+    try {
+      const str = value.toString('utf8');
+      // Try to parse as JSON if it looks like JSON
+      if ((str.startsWith('{') && str.endsWith('}')) || (str.startsWith('[') && str.endsWith(']'))) {
+        return JSON.parse(str);
+      }
+      return str;
+    } catch {
+      return value.toString('utf8');
+    }
+  }
+  
+  // Handle MySQL JSON type (which might come as string)
+  if (typeof value === 'string' && ((value.startsWith('{') && value.endsWith('}')) || (value.startsWith('[') && value.endsWith(']')))) {
+    try {
+      return JSON.parse(value);
+    } catch {
+      // If parsing fails, return as string
+      return value;
+    }
+  }
+  
+  return value;
 }
 
 // Add this new function to retrieve the database schema
@@ -1194,6 +1223,26 @@ async function getMySQLSchema(connection: mysql.Connection, dbName: string): Pro
   let schema = 'Database Type: MySQL\n\n';
 
   for (const table of tables as any[]) {
+    // Get table structure with column details including JSON columns
+    const columnsQuery = mysql.format(`
+      SELECT
+        COLUMN_NAME,
+        DATA_TYPE,
+        IS_NULLABLE,
+        COLUMN_DEFAULT,
+        COLUMN_COMMENT
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+      ORDER BY ORDINAL_POSITION
+    `, [dbName, table.TABLE_NAME]);
+    
+    const [columnsResult] = await new Promise<any[]>((resolve, reject) => {
+      connection.query(columnsQuery, (err: any, results: any) => {
+        if (err) reject(err);
+        else resolve([results]);
+      });
+    });
+
     const [createTableResult] = await new Promise<any[]>((resolve, reject) => {
       connection.query(`SHOW CREATE TABLE ${table.TABLE_NAME}`, (err: any, results: any) => {
         if (err) reject(err);
@@ -1203,7 +1252,21 @@ async function getMySQLSchema(connection: mysql.Connection, dbName: string): Pro
     const tableResult = createTableResult as any
     const createTableStatement = tableResult[0]['Create Table'];
 
-    schema += `${createTableStatement};\n\n`;
+    schema += `${createTableStatement};\n`;
+    
+    // Add JSON column information
+    const jsonColumns = (columnsResult as any[]).filter(col => col.DATA_TYPE === 'json');
+    if (jsonColumns.length > 0) {
+      schema += `-- JSON Columns in ${table.TABLE_NAME}:\n`;
+      for (const col of jsonColumns) {
+        schema += `--   ${col.COLUMN_NAME}: JSON type`;
+        if (col.COLUMN_COMMENT) {
+          schema += ` (${col.COLUMN_COMMENT})`;
+        }
+        schema += '\n';
+      }
+    }
+    schema += '\n';
   }
   schema += '\n'
   return schema;
@@ -1275,10 +1338,40 @@ export async function storeUser(user: User): Promise<void> {
 
 export async function generateShareToken(messageId: number): Promise<string> {
   const db = await getDb();
-  const shareToken = crypto.randomBytes(16).toString('hex');
-  let result;
 
   try {
+    // First, check if the message already has a share token
+    let existingToken: string | null = null;
+    
+    if (databaseConfig.type === 'mysql') {
+      const [rows] = await (db as mysql.Pool).execute(
+        'SELECT share_token FROM messages WHERE id = ?',
+        [messageId]
+      );
+      const arr = rows as any[];
+      if (arr && arr.length > 0 && arr[0].share_token) {
+        existingToken = arr[0].share_token;
+      }
+    } else {
+      const row = await (db as any).get(
+        'SELECT share_token FROM messages WHERE id = ?',
+        [messageId]
+      );
+      if (row && row.share_token) {
+        existingToken = row.share_token;
+      }
+    }
+
+    // If token already exists, return it
+    if (existingToken) {
+      console.log(`Reusing existing share token for message ${messageId}`);
+      return existingToken;
+    }
+
+    // Generate new token if none exists
+    const shareToken = crypto.randomBytes(16).toString('hex');
+    let result;
+
     if (databaseConfig.type === 'mysql') {
       result = await (db as mysql.Pool).execute(
         'UPDATE messages SET share_token = ? WHERE id = ?',
@@ -1289,7 +1382,6 @@ export async function generateShareToken(messageId: number): Promise<string> {
         console.error(`generateShareToken: No message updated for id ${messageId}`);
         throw new Error('Failed to update share token for message');
       }
-      return shareToken;
     } else {
       result = await (db as any).run(
         'UPDATE messages SET share_token = ? WHERE id = ?',
@@ -1301,6 +1393,8 @@ export async function generateShareToken(messageId: number): Promise<string> {
         throw new Error('Failed to update share token for message');
       }
     }
+    
+    console.log(`Generated new share token for message ${messageId}`);
     return shareToken;
   } catch (err) {
     console.error('generateShareToken error:', err);
