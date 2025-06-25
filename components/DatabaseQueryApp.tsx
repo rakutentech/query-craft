@@ -806,7 +806,16 @@ export default function DatabaseQueryApp() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate share link');
+        const errorData = await response.json().catch(() => ({}));
+        
+        // Handle specific error cases
+        if (response.status === 404) {
+          throw new Error(errorData.error || 'Message not found or has been deleted');
+        } else if (response.status === 400) {
+          throw new Error(errorData.error || 'Invalid message');
+        } else {
+          throw new Error(errorData.error || 'Failed to generate share link');
+        }
       }
 
       const data = await response.json();
@@ -818,9 +827,9 @@ export default function DatabaseQueryApp() {
         description: (
           <div className="mt-2">
             <p className="text-sm">Link copied to clipboard:</p>
-            <a 
-              href={shareUrl} 
-              target="_blank" 
+            <a
+              href={shareUrl}
+              target="_blank"
               rel="noopener noreferrer"
               className="text-sm text-primary hover:underline break-all"
             >
@@ -831,9 +840,11 @@ export default function DatabaseQueryApp() {
       });
     } catch (error) {
       console.error('Error sharing message:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate share link';
+      
       toast({
         title: "Error",
-        description: "Failed to generate share link",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -844,7 +855,20 @@ export default function DatabaseQueryApp() {
     try {
       // First, get the share token (reuse share endpoint)
       const response = await fetch(`/api/messages/${messageId}/share`, { method: 'POST' });
-      if (!response.ok) throw new Error('Failed to generate share token');
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        
+        // Handle specific error cases
+        if (response.status === 404) {
+          throw new Error(errorData.error || 'Message not found or has been deleted');
+        } else if (response.status === 400) {
+          throw new Error(errorData.error || 'Invalid message');
+        } else {
+          throw new Error(errorData.error || 'Failed to generate embed code');
+        }
+      }
+      
       const data = await response.json();
       const token = data.token;
       // Construct embed URL
@@ -852,8 +876,15 @@ export default function DatabaseQueryApp() {
       setEmbedUrl(url);
       setEmbedCode(`<iframe src=\"${url}\" width=\"600\" height=\"220\" frameborder=\"0\" allowfullscreen></iframe>`);
       setShowEmbedDialog(true);
-    } catch (err) {
-      // Optionally show toast
+    } catch (error) {
+      console.error('Error generating embed code:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate embed code';
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
     } finally {
       setEmbedLoading(false);
     }

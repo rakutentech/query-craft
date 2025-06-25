@@ -1340,32 +1340,35 @@ export async function generateShareToken(messageId: number): Promise<string> {
   const db = await getDb();
 
   try {
-    // First, check if the message already has a share token
-    let existingToken: string | null = null;
+    // First, check if the message exists and get its current share token
+    let messageData: any = null;
     
     if (databaseConfig.type === 'mysql') {
       const [rows] = await (db as mysql.Pool).execute(
-        'SELECT share_token FROM messages WHERE id = ?',
+        'SELECT id, share_token FROM messages WHERE id = ?',
         [messageId]
       );
       const arr = rows as any[];
-      if (arr && arr.length > 0 && arr[0].share_token) {
-        existingToken = arr[0].share_token;
+      if (arr && arr.length > 0) {
+        messageData = arr[0];
       }
     } else {
-      const row = await (db as any).get(
-        'SELECT share_token FROM messages WHERE id = ?',
+      messageData = await (db as any).get(
+        'SELECT id, share_token FROM messages WHERE id = ?',
         [messageId]
       );
-      if (row && row.share_token) {
-        existingToken = row.share_token;
-      }
+    }
+
+    // If message doesn't exist, throw an error
+    if (!messageData) {
+      console.error(`generateShareToken: Message not found for id ${messageId}`);
+      throw new Error('Message not found');
     }
 
     // If token already exists, return it
-    if (existingToken) {
+    if (messageData.share_token) {
       console.log(`Reusing existing share token for message ${messageId}`);
-      return existingToken;
+      return messageData.share_token;
     }
 
     // Generate new token if none exists
@@ -1398,6 +1401,9 @@ export async function generateShareToken(messageId: number): Promise<string> {
     return shareToken;
   } catch (err) {
     console.error('generateShareToken error:', err);
+    if (err instanceof Error && err.message === 'Message not found') {
+      throw err; // Re-throw the specific error
+    }
     throw new Error('Failed to generate share token');
   }
 }
