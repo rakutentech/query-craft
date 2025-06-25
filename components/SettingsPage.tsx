@@ -32,6 +32,7 @@ import {
 import ChatProviderConfig from "@/components/config/ChatProviderConfig";
 import {useChatProviderConfig} from "@/app/context/ChatProviderConfigContext";
 import Cookies from "js-cookie";
+
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 
 interface DatabaseConnection {

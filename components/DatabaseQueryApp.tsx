@@ -26,6 +26,13 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
+import {
   ClipboardCopy,
   Info,
   Play,
@@ -44,7 +51,7 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  Code
+  Code,
 } from "lucide-react";
 import { format, parseISO, addHours } from "date-fns";
 import ReactMarkdown from 'react-markdown';
@@ -61,7 +68,6 @@ import { Box, Flex, Text } from "@radix-ui/themes";
 import SqlResultPanel from './SqlResultPanel';
 import ResizableSplitter from './ResizableSplitter';
 import { TagCloud } from "@/components/ui/tag-cloud";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 const ENABLE_OAUTH = process.env.NEXT_PUBLIC_ENABLE_OAUTH;
@@ -134,7 +140,7 @@ export default function DatabaseQueryApp() {
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const [editingSqlId, setEditingSqlId] = useState<number | null>(null);
+  const [editingSqlId, setEditingSqlId] = useState<{messageId: number, sqlIndex: number} | null>(null);
   const [copySuccessId, setCopySuccessId] = useState<number | null>(null);
   //  different state from send button loading operation, so that support multiple operations at the same time
   const [loadingOperation, setLoadingOperation] = useState<{ type: 'explain' | 'run' | null; messageId: number | null }>({ type: null, messageId: null });
@@ -166,9 +172,10 @@ export default function DatabaseQueryApp() {
   const [showRecommendations, setShowRecommendations] = useState(false);
   const recommendationsRef = useRef<HTMLDivElement>(null);
 
+  // Embed functionality state
   const [showEmbedDialog, setShowEmbedDialog] = useState(false);
-  const [embedCode, setEmbedCode] = useState("");
-  const [embedUrl, setEmbedUrl] = useState("");
+  const [embedCode, setEmbedCode] = useState('');
+  const [embedUrl, setEmbedUrl] = useState('');
   const [embedLoading, setEmbedLoading] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
 
@@ -714,17 +721,82 @@ export default function DatabaseQueryApp() {
     );
   };
 
-  const handleSqlEdit = (messageId: number, sql: string) => {
-    setMessages(prev => prev.map(msg => 
-      msg.id === messageId ? { ...msg, editedSql: sql } : msg
+  const handleSqlEdit = (messageId: number, sqlIndex: number, sql: string) => {
+    setMessages(prev => prev.map(msg =>
+      msg.id === messageId ? { ...msg, [`editedSql_${sqlIndex}`]: sql } : msg
     ));
   };
 
-  const handleSqlSave = (messageId: number) => {
-    setMessages(prev => prev.map(msg => 
-      msg.id === messageId ? { ...msg, sql: msg.editedSql } : msg
-    ));
-    setEditingSqlId(null);
+  const handleSqlSave = async (messageId: number, sqlIndex: number) => {
+    const message = messages.find(msg => msg.id === messageId);
+    if (!message) return;
+
+    const editedSqlKey = `editedSql_${sqlIndex}`;
+    const editedSql = (message as any)[editedSqlKey];
+    if (!editedSql) return;
+
+    // Split content by SQL blocks and update the specific one
+    const parts = message.content.split(/(```sql[\s\S]*?```)/);
+    let sqlBlockIndex = 0;
+    
+    const updatedParts = parts.map(part => {
+      if (part.startsWith('```sql')) {
+        if (sqlBlockIndex === sqlIndex) {
+          sqlBlockIndex++;
+          return `\`\`\`sql\n${editedSql}\n\`\`\``;
+        }
+        sqlBlockIndex++;
+      }
+      return part;
+    });
+
+    const updatedContent = updatedParts.join('');
+
+    try {
+      // Save to backend
+      const response = await fetch(`${BASE_PATH}/api/messages/${messageId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content: updatedContent }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save SQL changes');
+      }
+
+      // Update local state - also update the sql field for the specific SQL block
+      setMessages(prev => prev.map(msg => {
+        if (msg.id === messageId) {
+          const updatedMsg = { ...msg, content: updatedContent };
+          // Clear the edited SQL
+          delete (updatedMsg as any)[editedSqlKey];
+          
+          // Update the sql field if this is the first SQL block
+          if (sqlIndex === 0) {
+            updatedMsg.sql = editedSql;
+          }
+          
+          return updatedMsg;
+        }
+        return msg;
+      }));
+      
+      setEditingSqlId(null);
+
+      toast({
+        title: "SQL Updated",
+        description: "Your SQL changes have been saved successfully.",
+      });
+    } catch (error) {
+      console.error('Error saving SQL:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save SQL changes. Please try again.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleShareMessage = async (messageId: number) => {
@@ -734,7 +806,16 @@ export default function DatabaseQueryApp() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to generate share link');
+        const errorData = await response.json().catch(() => ({}));
+        
+        // Handle specific error cases
+        if (response.status === 404) {
+          throw new Error(errorData.error || 'Message not found or has been deleted');
+        } else if (response.status === 400) {
+          throw new Error(errorData.error || 'Invalid message');
+        } else {
+          throw new Error(errorData.error || 'Failed to generate share link');
+        }
       }
 
       const data = await response.json();
@@ -746,9 +827,9 @@ export default function DatabaseQueryApp() {
         description: (
           <div className="mt-2">
             <p className="text-sm">Link copied to clipboard:</p>
-            <a 
-              href={shareUrl} 
-              target="_blank" 
+            <a
+              href={shareUrl}
+              target="_blank"
               rel="noopener noreferrer"
               className="text-sm text-primary hover:underline break-all"
             >
@@ -759,9 +840,11 @@ export default function DatabaseQueryApp() {
       });
     } catch (error) {
       console.error('Error sharing message:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate share link';
+      
       toast({
         title: "Error",
-        description: "Failed to generate share link",
+        description: errorMessage,
         variant: "destructive",
       });
     }
@@ -772,7 +855,20 @@ export default function DatabaseQueryApp() {
     try {
       // First, get the share token (reuse share endpoint)
       const response = await fetch(`/api/messages/${messageId}/share`, { method: 'POST' });
-      if (!response.ok) throw new Error('Failed to generate share token');
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        
+        // Handle specific error cases
+        if (response.status === 404) {
+          throw new Error(errorData.error || 'Message not found or has been deleted');
+        } else if (response.status === 400) {
+          throw new Error(errorData.error || 'Invalid message');
+        } else {
+          throw new Error(errorData.error || 'Failed to generate embed code');
+        }
+      }
+      
       const data = await response.json();
       const token = data.token;
       // Construct embed URL
@@ -780,8 +876,15 @@ export default function DatabaseQueryApp() {
       setEmbedUrl(url);
       setEmbedCode(`<iframe src=\"${url}\" width=\"600\" height=\"220\" frameborder=\"0\" allowfullscreen></iframe>`);
       setShowEmbedDialog(true);
-    } catch (err) {
-      // Optionally show toast
+    } catch (error) {
+      console.error('Error generating embed code:', error);
+      const errorMessage = error instanceof Error ? error.message : 'Failed to generate embed code';
+      
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      });
     } finally {
       setEmbedLoading(false);
     }
@@ -792,13 +895,18 @@ export default function DatabaseQueryApp() {
 
     const renderContent = (content: string) => {
       const parts = content.split(/(```sql[\s\S]*?```)/);
+      let sqlBlockIndex = 0;
 
       return parts.map((part, index) => {
         if (part.startsWith('```sql')) {
           const sql = part.replace('```sql', '').replace('```', '').trim();
           const messageId = message.id;
-          const isEditing = editingSqlId === messageId;
-          const currentSql = message.editedSql || sql;
+          const currentSqlIndex = sqlBlockIndex;
+          sqlBlockIndex++;
+          const isEditing = editingSqlId?.messageId === messageId && editingSqlId?.sqlIndex === currentSqlIndex;
+          const editedSqlKey = `editedSql_${currentSqlIndex}`;
+          // Use edited SQL if available, otherwise use the SQL from the current content part
+          const currentSql = (message as any)[editedSqlKey] || sql;
 
           return (
             <div key={index} className="my-3 bg-accent/10 dark:bg-accent/20 text-accent-foreground dark:text-accent-foreground p-3 rounded-lg">
@@ -833,7 +941,7 @@ export default function DatabaseQueryApp() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          onClick={() => isEditing ? handleSqlSave(messageId) : setEditingSqlId(messageId)}
+                          onClick={() => isEditing ? handleSqlSave(messageId, currentSqlIndex) : setEditingSqlId({messageId, sqlIndex: currentSqlIndex})}
                         >
                           {isEditing ? <Check className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
                         </Button>
@@ -849,7 +957,7 @@ export default function DatabaseQueryApp() {
                 <div className="relative">
                   <Textarea
                     value={currentSql}
-                    onChange={(e) => handleSqlEdit(messageId, e.target.value)}
+                    onChange={(e) => handleSqlEdit(messageId, currentSqlIndex, e.target.value)}
                     className="font-mono bg-gray-800 text-gray-100 p-2 rounded-md w-full min-h-[100px] resize-none sql-editor"
                     style={{ 
                       outline: 'none',
@@ -866,8 +974,7 @@ export default function DatabaseQueryApp() {
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
-                        handleSqlEdit(messageId, currentSql);
-                        setEditingSqlId(null);
+                        handleSqlSave(messageId, currentSqlIndex);
                       }
                     }}
                     autoFocus
@@ -876,10 +983,7 @@ export default function DatabaseQueryApp() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => {
-                        handleSqlEdit(messageId, currentSql);
-                        setEditingSqlId(null);
-                      }}
+                      onClick={() => handleSqlSave(messageId, currentSqlIndex)}
                       className="h-8 px-2 text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300"
                     >
                       <Check className="h-4 w-4 mr-1" />
@@ -889,6 +993,15 @@ export default function DatabaseQueryApp() {
                       variant="ghost"
                       size="sm"
                       onClick={() => {
+                        // Clear any edited SQL for this specific block
+                        setMessages(prev => prev.map(msg => {
+                          if (msg.id === messageId) {
+                            const updatedMsg = { ...msg };
+                            delete (updatedMsg as any)[`editedSql_${currentSqlIndex}`];
+                            return updatedMsg;
+                          }
+                          return msg;
+                        }));
                         setEditingSqlId(null);
                       }}
                       className="h-8 px-2 text-muted-foreground dark:text-muted-foreground hover:text-foreground dark:hover:text-foreground"
@@ -935,7 +1048,14 @@ export default function DatabaseQueryApp() {
                 {isEditing && (
                   <Button
                     onClick={() => {
-                      handleSqlEdit(messageId, sql);
+                      setMessages(prev => prev.map(msg => {
+                        if (msg.id === messageId) {
+                          const updatedMsg = { ...msg };
+                          delete (updatedMsg as any)[`editedSql_${currentSqlIndex}`];
+                          return updatedMsg;
+                        }
+                        return msg;
+                      }));
                       setEditingSqlId(null);
                     }}
                     size="sm"
@@ -1068,23 +1188,39 @@ export default function DatabaseQueryApp() {
             <p className="text-xs mt-2 opacity-70">
               {formatJapanTime(message.timestamp)}
             </p>
-            <div className="mt-2 flex justify-end gap-2">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleShareMessage(message.id)}
-              >
-                <Share2 className="w-4 h-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => handleEmbedMessage(message.id)}
-                disabled={embedLoading}
-                aria-label="Embed message"
-              >
-                <Code className="w-4 h-4" />
-              </Button>
+            <div className="mt-2 flex justify-end space-x-2">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleShareMessage(message.id)}
+                    >
+                      <Share2 className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Share Message</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEmbedMessage(message.id)}
+                    >
+                      <Code className="w-4 h-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <p>Copy Embed URL</p>
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             </div>
           </div>
         </div>

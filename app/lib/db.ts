@@ -416,6 +416,7 @@ export async function getDatabaseConnections(userId: string): Promise<DatabaseCo
   }
 }
 
+
 export async function getUserConnectionById(id: number, userId: string): Promise<DatabaseConnection | null> {
   const db = await getDb();
   if (databaseConfig.type === 'mysql') {
@@ -443,6 +444,52 @@ export async function getUserConnectionById(id: number, userId: string): Promise
     const connection = await (db as SQLiteDatabase).get<DatabaseConnection>(
       'SELECT * FROM database_connections WHERE id = ? AND user_id = ?',
       [id, userId]
+    );
+    if (!connection) return null;
+    return {
+      id: connection.id,
+      user_id: connection.user_id,
+      projectName: connection.projectName ?? '',
+      dbDriver: connection.dbDriver ?? '',
+      dbHost: connection.dbHost ?? '',
+      dbPort: connection.dbPort ?? '',
+      dbUsername: connection.dbUsername ?? '',
+      dbPassword: connection.dbPassword ?? '',
+      dbName: connection.dbName ?? '',
+      schema: connection.schema ?? '',
+      created_at: connection.created_at,
+      updated_at: connection.updated_at
+    };
+  }
+}
+
+export async function getConnectionById(id: number): Promise<DatabaseConnection | null> {
+  const db = await getDb();
+  if (databaseConfig.type === 'mysql') {
+    const [rows] = await (db as mysql.Pool).execute(
+      'SELECT * FROM database_connections WHERE id = ?',
+      [id]
+    );
+    const connection = (rows as any[])[0];
+    if (!connection) return null;
+    return {
+      id: connection.id,
+      user_id: connection.user_id,
+      projectName: connection.projectName ?? '',
+      dbDriver: connection.dbDriver ?? '',
+      dbHost: connection.dbHost ?? '',
+      dbPort: connection.dbPort ?? '',
+      dbUsername: connection.dbUsername ?? '',
+      dbPassword: connection.dbPassword ?? '',
+      dbName: connection.dbName ?? '',
+      schema: connection.schema ?? '',
+      created_at: connection.created_at,
+      updated_at: connection.updated_at
+    };
+  } else {
+    const connection = await (db as SQLiteDatabase).get<DatabaseConnection>(
+      'SELECT * FROM database_connections WHERE id = ?',
+      [id]
     );
     if (!connection) return null;
     return {
@@ -625,9 +672,15 @@ export async function testDatabaseConnection(connection: DatabaseConnection): Pr
 }
 
 // Improve executeQuery function with better error handling and logging
-export async function executeQuery(sql: string, connectionId: number, userId: string): Promise<any[]> {
-  const connection = await getUserConnectionById(connectionId, userId);
-  
+export async function executeQuery(sql: string, connectionId: number, userId: string = 'anonymous'): Promise<any[]> {
+  let connection = null;
+  if (userId === 'anonymous') {
+    // For shared token access, we don't check userId
+    logDbOperation('Fetching connection by ID for anonymous user', { connectionId });
+    connection = await getConnectionById(connectionId);
+  } else {
+    connection = await getUserConnectionById(connectionId, userId);
+  }
   if (!connection) {
     const error = new Error(`Database connection not found for id: ${connectionId}`);
     logDbError('Execute query failed', error);
@@ -1037,7 +1090,36 @@ export async function executeQueryStream(sql: string, connectionId: number, user
 }
 
 function jsonBigIntReplacer(_key: string, value: any) {
-  return typeof value === 'bigint' ? value.toString() : value;
+  // Handle BigInt values
+  if (typeof value === 'bigint') {
+    return value.toString();
+  }
+  
+  // Handle Buffer objects (common in MySQL for JSON columns)
+  if (value && typeof value === 'object' && value.constructor && value.constructor.name === 'Buffer') {
+    try {
+      const str = value.toString('utf8');
+      // Try to parse as JSON if it looks like JSON
+      if ((str.startsWith('{') && str.endsWith('}')) || (str.startsWith('[') && str.endsWith(']'))) {
+        return JSON.parse(str);
+      }
+      return str;
+    } catch {
+      return value.toString('utf8');
+    }
+  }
+  
+  // Handle MySQL JSON type (which might come as string)
+  if (typeof value === 'string' && ((value.startsWith('{') && value.endsWith('}')) || (value.startsWith('[') && value.endsWith(']')))) {
+    try {
+      return JSON.parse(value);
+    } catch {
+      // If parsing fails, return as string
+      return value;
+    }
+  }
+  
+  return value;
 }
 
 // Add this new function to retrieve the database schema
@@ -1141,6 +1223,26 @@ async function getMySQLSchema(connection: mysql.Connection, dbName: string): Pro
   let schema = 'Database Type: MySQL\n\n';
 
   for (const table of tables as any[]) {
+    // Get table structure with column details including JSON columns
+    const columnsQuery = mysql.format(`
+      SELECT
+        COLUMN_NAME,
+        DATA_TYPE,
+        IS_NULLABLE,
+        COLUMN_DEFAULT,
+        COLUMN_COMMENT
+      FROM INFORMATION_SCHEMA.COLUMNS
+      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+      ORDER BY ORDINAL_POSITION
+    `, [dbName, table.TABLE_NAME]);
+    
+    const [columnsResult] = await new Promise<any[]>((resolve, reject) => {
+      connection.query(columnsQuery, (err: any, results: any) => {
+        if (err) reject(err);
+        else resolve([results]);
+      });
+    });
+
     const [createTableResult] = await new Promise<any[]>((resolve, reject) => {
       connection.query(`SHOW CREATE TABLE ${table.TABLE_NAME}`, (err: any, results: any) => {
         if (err) reject(err);
@@ -1150,7 +1252,21 @@ async function getMySQLSchema(connection: mysql.Connection, dbName: string): Pro
     const tableResult = createTableResult as any
     const createTableStatement = tableResult[0]['Create Table'];
 
-    schema += `${createTableStatement};\n\n`;
+    schema += `${createTableStatement};\n`;
+    
+    // Add JSON column information
+    const jsonColumns = (columnsResult as any[]).filter(col => col.DATA_TYPE === 'json');
+    if (jsonColumns.length > 0) {
+      schema += `-- JSON Columns in ${table.TABLE_NAME}:\n`;
+      for (const col of jsonColumns) {
+        schema += `--   ${col.COLUMN_NAME}: JSON type`;
+        if (col.COLUMN_COMMENT) {
+          schema += ` (${col.COLUMN_COMMENT})`;
+        }
+        schema += '\n';
+      }
+    }
+    schema += '\n';
   }
   schema += '\n'
   return schema;
@@ -1222,10 +1338,43 @@ export async function storeUser(user: User): Promise<void> {
 
 export async function generateShareToken(messageId: number): Promise<string> {
   const db = await getDb();
-  const shareToken = crypto.randomBytes(16).toString('hex');
-  let result;
 
   try {
+    // First, check if the message exists and get its current share token
+    let messageData: any = null;
+    
+    if (databaseConfig.type === 'mysql') {
+      const [rows] = await (db as mysql.Pool).execute(
+        'SELECT id, share_token FROM messages WHERE id = ?',
+        [messageId]
+      );
+      const arr = rows as any[];
+      if (arr && arr.length > 0) {
+        messageData = arr[0];
+      }
+    } else {
+      messageData = await (db as any).get(
+        'SELECT id, share_token FROM messages WHERE id = ?',
+        [messageId]
+      );
+    }
+
+    // If message doesn't exist, throw an error
+    if (!messageData) {
+      console.error(`generateShareToken: Message not found for id ${messageId}`);
+      throw new Error('Message not found');
+    }
+
+    // If token already exists, return it
+    if (messageData.share_token) {
+      console.log(`Reusing existing share token for message ${messageId}`);
+      return messageData.share_token;
+    }
+
+    // Generate new token if none exists
+    const shareToken = crypto.randomBytes(16).toString('hex');
+    let result;
+
     if (databaseConfig.type === 'mysql') {
       result = await (db as mysql.Pool).execute(
         'UPDATE messages SET share_token = ? WHERE id = ?',
@@ -1236,7 +1385,6 @@ export async function generateShareToken(messageId: number): Promise<string> {
         console.error(`generateShareToken: No message updated for id ${messageId}`);
         throw new Error('Failed to update share token for message');
       }
-      return shareToken;
     } else {
       result = await (db as any).run(
         'UPDATE messages SET share_token = ? WHERE id = ?',
@@ -1248,9 +1396,14 @@ export async function generateShareToken(messageId: number): Promise<string> {
         throw new Error('Failed to update share token for message');
       }
     }
+    
+    console.log(`Generated new share token for message ${messageId}`);
     return shareToken;
   } catch (err) {
     console.error('generateShareToken error:', err);
+    if (err instanceof Error && err.message === 'Message not found') {
+      throw err; // Re-throw the specific error
+    }
     throw new Error('Failed to generate share token');
   }
 }
@@ -1455,5 +1608,65 @@ export async function getUserMessageRecommendations(userId: string, limit: strin
       return [];
     }
     return rows.map(row => row.content);
+  }
+}
+
+export async function getMessageById(id: number): Promise<Message | null> {
+  const db = await getDb();
+  try {
+    if (databaseConfig.type === 'mysql') {
+      const [rows] = await (db as any).execute(
+        `SELECT * FROM messages WHERE id = ?`,
+        [id]
+      );
+      const arr = rows as any[];
+      if (!arr || arr.length === 0) {
+        return null;
+      }
+      return arr[0] as Message;
+    } else {
+      const message = await (db as any).get(
+        `SELECT * FROM messages WHERE id = ?`,
+        [id]
+      );
+      if (!message) {
+        return null;
+      }
+      return message as Message;
+    }
+  } catch (error) {
+    console.error('Error fetching message by id:', error);
+    throw error;
+  }
+}
+
+// update message content by id
+export async function updateMessageById(id: number, content: string): Promise<void> {
+  const db = await getDb();
+  try {
+    if (databaseConfig.type === 'mysql') {
+      const [result] = await (db as any).execute(
+        `UPDATE messages SET content = ? WHERE id = ?`,
+        [content, id]
+      );
+      // MySQL: result.affectedRows
+      if (!result || (result as any).affectedRows === 0) {
+        console.error(`updateMessageContent: No message updated for id ${id}`);
+        throw new Error('Failed to update message content');
+      }
+    } else {
+      const result = await (db as SQLiteDatabase).run(
+        `UPDATE messages SET content = ? WHERE id = ?`,
+        [content, id]
+      );
+      // SQLite: result.changes
+      if (!result || (result.changes ?? 0) === 0) {
+        console.error(`updateMessageContent: No message updated for id ${id}`);
+        throw new Error('Failed to update message content');
+      }
+    }
+  } catch (error) {
+    console.error('Error updating message content:', error);
+    throw error;
   }
 }
