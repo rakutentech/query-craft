@@ -68,6 +68,7 @@ import { Box, Flex, Text } from "@radix-ui/themes";
 import SqlResultPanel from './SqlResultPanel';
 import ResizableSplitter from './ResizableSplitter';
 import { TagCloud } from "@/components/ui/tag-cloud";
+import TableFieldSelector from './TableFieldSelector';
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 const ENABLE_OAUTH = process.env.NEXT_PUBLIC_ENABLE_OAUTH;
@@ -110,6 +111,11 @@ interface Conversation {
   title: string;
   connectionId: number;
   timestamp: string;
+}
+
+interface SelectedTable {
+  name: string;
+  fields: string[];
 }
 
 
@@ -178,6 +184,7 @@ export default function DatabaseQueryApp() {
   const [embedUrl, setEmbedUrl] = useState('');
   const [embedLoading, setEmbedLoading] = useState(false);
   const [embedCopied, setEmbedCopied] = useState(false);
+
 
   useEffect(() => {
     let isMounted = true;
@@ -888,6 +895,33 @@ export default function DatabaseQueryApp() {
     } finally {
       setEmbedLoading(false);
     }
+  };
+
+  const handleGenerateQueryFromTables = (selectedTables: SelectedTable[]) => {
+    if (selectedTables.length === 0) return;
+
+    let queryMessage = "Please help me create a SQL query to ";
+    
+    if (selectedTables.length === 1) {
+      const table = selectedTables[0];
+      if (table.fields.length === 0) {
+        queryMessage += `select all fields from the ${table.name} table.`;
+      } else {
+        queryMessage += `select the following fields: ${table.fields.join(', ')} from the ${table.name} table.`;
+      }
+    } else {
+      queryMessage += "join the following tables and select the specified fields:\n\n";
+      selectedTables.forEach((table, index) => {
+        if (table.fields.length === 0) {
+          queryMessage += `${index + 1}. Table: ${table.name} - select all fields\n`;
+        } else {
+          queryMessage += `${index + 1}. Table: ${table.name} - select fields: ${table.fields.join(', ')}\n`;
+        }
+      });
+      queryMessage += "\nPlease create an appropriate JOIN query based on the relationships between these tables.";
+    }
+
+    setInputMessage(queryMessage);
   };
 
   const renderMessage = (message: Message) => {
@@ -1729,14 +1763,16 @@ export default function DatabaseQueryApp() {
                   <ScrollArea className="h-full pr-4">
                     <div className="space-y-4 h-[calc(80vh-65px)]">
                       {messages.length === 0 && (
-                          <div className="text-center">
-                            <p className="text-muted-foreground dark:text-muted-foreground">
-                              Start a conversation by typing your query.
-                              <br />
-                              Here are the available tables in your database:
+                          <div className="h-full">
+                            <p className="text-center text-muted-foreground dark:text-muted-foreground mb-4">
+                              Select tables and fields to generate a query, or start typing your own query below.
                             </p>
-                            <div className="mt-4">
-                              <TagCloud className="mt-4" tags={listOfDBTables} />
+                            <div className="h-[calc(100%-2rem)]">
+                              <TableFieldSelector
+                                tables={listOfDBTables}
+                                selectedConnectionId={selectedConnectionId}
+                                onGenerateQuery={handleGenerateQueryFromTables}
+                              />
                             </div>
                           </div>
                       )}
@@ -1964,6 +2000,7 @@ export default function DatabaseQueryApp() {
           </div>
         </DialogContent>
       </Dialog>
+
     </Box>
   );
 }
