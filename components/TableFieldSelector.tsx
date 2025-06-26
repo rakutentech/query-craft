@@ -54,6 +54,8 @@ export default function TableFieldSelector({
   const [selectedTables, setSelectedTables] = useState<SelectedTable[]>([]);
   const [tableFields, setTableFields] = useState<Record<string, TableField[]>>({});
   const [tableStats, setTableStats] = useState<Record<string, TableStats>>({});
+  const [fieldsCache, setFieldsCache] = useState<Record<string, { data: TableField[], timestamp: number }>>({});
+  const [statsCache, setStatsCache] = useState<Record<string, { data: TableStats, timestamp: number }>>({});
   const [expandedTables, setExpandedTables] = useState<Set<string>>(new Set());
   const [loadingFields, setLoadingFields] = useState<Set<string>>(new Set());
   const [loadingStats, setLoadingStats] = useState<Set<string>>(new Set());
@@ -71,16 +73,53 @@ export default function TableFieldSelector({
     return 'asc';
   });
 
-  // Fetch stats for all tables when component mounts or tables change
+  // Load cached data and fetch stats for all tables when component mounts or tables change
   useEffect(() => {
     if (selectedConnectionId && tables.length > 0) {
       tables.forEach(tableName => {
-        if (!tableStats[tableName]) {
+        // Try to load from cache first
+        const cachedStats = getCachedStats(tableName);
+        if (cachedStats) {
+          setTableStats(prev => ({ ...prev, [tableName]: cachedStats }));
+        } else if (!tableStats[tableName]) {
           fetchTableStats(tableName);
         }
       });
     }
   }, [selectedConnectionId, tables]);
+
+  // Cleanup expired cache entries periodically
+  useEffect(() => {
+    const cleanupInterval = setInterval(() => {
+      const now = Date.now();
+      
+      // Clean up expired fields cache
+      setFieldsCache(prev => {
+        const cleaned = { ...prev };
+        Object.keys(cleaned).forEach(key => {
+          if (!isCacheValid(cleaned[key].timestamp)) {
+            delete cleaned[key];
+            console.log(`Expired fields cache for ${key}`);
+          }
+        });
+        return cleaned;
+      });
+
+      // Clean up expired stats cache
+      setStatsCache(prev => {
+        const cleaned = { ...prev };
+        Object.keys(cleaned).forEach(key => {
+          if (!isCacheValid(cleaned[key].timestamp)) {
+            delete cleaned[key];
+            console.log(`Expired stats cache for ${key}`);
+          }
+        });
+        return cleaned;
+      });
+    }, 5 * 60 * 1000); // Check every 5 minutes
+
+    return () => clearInterval(cleanupInterval);
+  }, []);
 
   // Save sort preferences to localStorage
   useEffect(() => {
@@ -90,8 +129,61 @@ export default function TableFieldSelector({
     }
   }, [sortBy, sortDirection]);
 
+  // Cache utility functions
+  const CACHE_DURATION = 30 * 60 * 1000; // 30 minutes in milliseconds
+
+  const isCacheValid = (timestamp: number) => {
+    return Date.now() - timestamp < CACHE_DURATION;
+  };
+
+  const getCachedFields = (tableName: string): TableField[] | null => {
+    const cached = fieldsCache[tableName];
+    if (cached && isCacheValid(cached.timestamp)) {
+      return cached.data;
+    }
+    return null;
+  };
+
+  const setCachedFields = (tableName: string, data: TableField[]) => {
+    setFieldsCache(prev => ({
+      ...prev,
+      [tableName]: { data, timestamp: Date.now() }
+    }));
+  };
+
+  const getCachedStats = (tableName: string): TableStats | null => {
+    const cached = statsCache[tableName];
+    if (cached && isCacheValid(cached.timestamp)) {
+      return cached.data;
+    }
+    return null;
+  };
+
+  const setCachedStats = (tableName: string, data: TableStats) => {
+    setStatsCache(prev => ({
+      ...prev,
+      [tableName]: { data, timestamp: Date.now() }
+    }));
+  };
+
+  const clearCache = () => {
+    setFieldsCache({});
+    setStatsCache({});
+    console.log('Cache cleared manually');
+  };
+
   const fetchTableFields = async (tableName: string) => {
-    if (!selectedConnectionId || tableFields[tableName]) return;
+    if (!selectedConnectionId) return;
+
+    // Check cache first
+    const cachedFields = getCachedFields(tableName);
+    if (cachedFields) {
+      setTableFields(prev => ({ ...prev, [tableName]: cachedFields }));
+      return;
+    }
+
+    // If already in state and not expired, don't fetch again
+    if (tableFields[tableName]) return;
 
     setLoadingFields(prev => new Set(prev).add(tableName));
     
@@ -101,7 +193,12 @@ export default function TableFieldSelector({
         throw new Error("Failed to fetch table fields");
       }
       const fields = await response.json();
+      
+      // Update both state and cache
       setTableFields(prev => ({ ...prev, [tableName]: fields }));
+      setCachedFields(tableName, fields);
+      
+      console.log(`Cached fields for ${tableName} for 30 minutes`);
     } catch (error) {
       console.error("Error fetching table fields:", error);
     } finally {
@@ -114,7 +211,17 @@ export default function TableFieldSelector({
   };
 
   const fetchTableStats = async (tableName: string) => {
-    if (!selectedConnectionId || tableStats[tableName]) return;
+    if (!selectedConnectionId) return;
+
+    // Check cache first
+    const cachedStats = getCachedStats(tableName);
+    if (cachedStats) {
+      setTableStats(prev => ({ ...prev, [tableName]: cachedStats }));
+      return;
+    }
+
+    // If already in state and not expired, don't fetch again
+    if (tableStats[tableName]) return;
 
     setLoadingStats(prev => new Set(prev).add(tableName));
     
@@ -125,7 +232,12 @@ export default function TableFieldSelector({
       }
       const stats = await response.json();
       console.log(`Received stats for ${tableName}:`, stats);
+      
+      // Update both state and cache
       setTableStats(prev => ({ ...prev, [tableName]: stats }));
+      setCachedStats(tableName, stats);
+      
+      console.log(`Cached stats for ${tableName} for 30 minutes`);
     } catch (error) {
       console.error("Error fetching table statistics:", error);
     } finally {
