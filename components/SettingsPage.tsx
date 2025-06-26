@@ -18,7 +18,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { PlusCircle, Trash2, Asterisk } from "lucide-react";
+import { PlusCircle, Trash2, Asterisk, RotateCcw } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -127,6 +127,7 @@ export default function SettingsPage() {
   const [connectionsWithoutSchema, setConnectionsWithoutSchema] = useState<number[]>([]);
   const [testingConnection, setTestingConnection] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showResetDialog, setShowResetDialog] = useState(false);
 
   useEffect(() => {
     // Try to load cached settings first for instant display
@@ -433,6 +434,27 @@ export default function SettingsPage() {
     }
   };
 
+  const handleResetSettings = async () => {
+    try {
+      const defaultSettings = await fetchDefaultSettings();
+      if (defaultSettings) {
+        const newSettings = {
+          aiSettings: { id: 1, systemPrompt: DEFAULT_SYSTEM_PROMPT },
+          databaseConnections: defaultSettings.databaseConnections
+        };
+        setSettings(newSettings);
+        setTestConnectionResult({});
+        setError(null);
+        setFormErrors({});
+        localStorage.setItem('settingsCache', JSON.stringify(newSettings));
+        setShowResetDialog(false);
+      }
+    } catch (error) {
+      console.error("Error resetting settings:", error);
+      setError("Failed to reset settings. Please try again.");
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -486,6 +508,27 @@ export default function SettingsPage() {
             </AlertDialogCancel>
             <AlertDialogAction onClick={saveSettings}>
               Save Anyway
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+      <AlertDialog open={showResetDialog} onOpenChange={setShowResetDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset Settings</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will reset all settings to their default values. All current database connections and configurations will be lost. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowResetDialog(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleResetSettings}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              Reset Settings
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -732,11 +775,21 @@ export default function SettingsPage() {
         <Button onClick={addDatabaseConnection} className="w-full bg-gray-500 hover:bg-gray-600">
         <PlusCircle className="mr-2 h-4 w-4" /> Add Database Connection
         </Button>
-        <div className="flex justify-end space-x-4">
-          <Button variant="outline" onClick={() => router.push("/")}>Cancel</Button>
-          <Button onClick={handleSave} disabled={isSaving} className="bg-green-600 hover:bg-green-700">
-            {isSaving ? <Spinner /> : "Save Settings"}
+        <div className="flex justify-between">
+          <Button
+            variant="outline"
+            onClick={() => setShowResetDialog(true)}
+            className="text-red-600 border-red-600 hover:bg-red-50 hover:text-red-700"
+          >
+            <RotateCcw className="mr-2 h-4 w-4" />
+            Reset Settings
           </Button>
+          <div className="flex space-x-4">
+            <Button variant="outline" onClick={() => router.push("/")}>Cancel</Button>
+            <Button onClick={handleSave} disabled={isSaving} className="bg-green-600 hover:bg-green-700">
+              {isSaving ? <Spinner /> : "Save Settings"}
+            </Button>
+          </div>
         </div>
       </div>
     </div>

@@ -8,12 +8,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const session = await getServerSession(authOptions);
     const userId = process.env.NEXT_PUBLIC_ENABLE_OAUTH === 'true' ? (session?.user?.id || 'anonymous') : 'anonymous';
 
-    const messageId = parseInt(params.id);
+    const messageId = params.id;
     
-    // Validate messageId
-    if (isNaN(messageId) || messageId <= 0) {
-      return NextResponse.json({ error: 'Invalid message ID' }, { status: 400 });
+    // Validate messageId (should be a valid UUID format)
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!messageId || !uuidRegex.test(messageId)) {
+      return NextResponse.json({ error: 'Invalid message ID format' }, { status: 400 });
     }
+
+    // Add a small delay to allow for any pending database operations to complete
+    await new Promise(resolve => setTimeout(resolve, 100));
 
     const shareToken = await generateShareToken(messageId);
     return NextResponse.json({ token: shareToken });
@@ -23,7 +27,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Handle specific error cases
     if (error instanceof Error) {
       if (error.message === 'Message not found') {
-        return NextResponse.json({ error: 'Message not found or has been deleted' }, { status: 404 });
+        return NextResponse.json({
+          error: 'Message not found. Please wait a moment for the message to be saved and try again.'
+        }, { status: 404 });
       }
       if (error.message.includes('Failed to update share token')) {
         return NextResponse.json({ error: 'Unable to create share link for this message' }, { status: 500 });

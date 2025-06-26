@@ -32,11 +32,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return new NextResponse('Message not found', { status: 404 });
     }
 
-    // Get the origin from the request to build the full URL
-    const origin = request.headers.get('origin') ||
-                   request.headers.get('referer')?.split('/').slice(0, 3).join('/') ||
-                   `${request.nextUrl.protocol}//${request.nextUrl.host}`;
-    const sharedPageUrl = `${origin}/messages/shared/${token}`;
+    // Always use the site that generated the embed link (Query Craft)
+    // Use environment variable if available, otherwise fall back to request host
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ||
+                    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` :
+                    `${request.nextUrl.protocol}//${request.nextUrl.host}`;
+    const sharedPageUrl = `${baseUrl}/messages/shared/${token}`;
 
     // Minimal HTML for embedding
     return new NextResponse(

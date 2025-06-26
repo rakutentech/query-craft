@@ -69,6 +69,7 @@ import SqlResultPanel from './SqlResultPanel';
 import ResizableSplitter from './ResizableSplitter';
 import { TagCloud } from "@/components/ui/tag-cloud";
 import TableFieldSelector from './TableFieldSelector';
+import { v4 as uuidv4 } from 'uuid';
 
 const BASE_PATH =  process.env.NEXT_PUBLIC_BASE_PATH;
 const ENABLE_OAUTH = process.env.NEXT_PUBLIC_ENABLE_OAUTH;
@@ -84,7 +85,7 @@ interface QueryResponse {
 }
 
 interface Message {
-  id: number;
+  id: string;
   content: string;
   sender: "user" | "system";
   timestamp: string;
@@ -130,7 +131,7 @@ export default function DatabaseQueryApp() {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingSql, setPendingSql] = useState<{
     sql: string;
-    messageId: number;
+    messageId: string;
   } | null>(null);
   const [databaseConnections, setDatabaseConnections] = useState<
     DatabaseConnection[]
@@ -146,10 +147,10 @@ export default function DatabaseQueryApp() {
   });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
-  const [editingSqlId, setEditingSqlId] = useState<{messageId: number, sqlIndex: number} | null>(null);
-  const [copySuccessId, setCopySuccessId] = useState<number | null>(null);
+  const [editingSqlId, setEditingSqlId] = useState<{messageId: string, sqlIndex: number} | null>(null);
+  const [copySuccessId, setCopySuccessId] = useState<string | null>(null);
   //  different state from send button loading operation, so that support multiple operations at the same time
-  const [loadingOperation, setLoadingOperation] = useState<{ type: 'explain' | 'run' | null; messageId: number | null }>({ type: null, messageId: null });
+  const [loadingOperation, setLoadingOperation] = useState<{ type: 'explain' | 'run' | null; messageId: string | null }>({ type: null, messageId: null });
   const conversationsCache = useRef<Map<number, Conversation[]>>(new Map());
   const [showAuth, setShowAuth] = useState(false);
   const { providerConfig} = useChatProviderConfig();
@@ -370,7 +371,7 @@ export default function DatabaseQueryApp() {
 
     // Optimistically add user's message to chat area
     const tempMessage: Message = {
-      id: Date.now(),
+      id: uuidv4(),
       content: inputMessage,
       sender: "user",
       timestamp: formatJapanTime(new Date().toISOString()),
@@ -404,7 +405,7 @@ export default function DatabaseQueryApp() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let systemMessageId = Date.now();
+      let systemMessageId = uuidv4();
 
       while (!done) {
         const { value, done: readerDone } = await reader.read();
@@ -474,7 +475,7 @@ export default function DatabaseQueryApp() {
     } catch (error) {
       console.error("Error executing query:", error);
       const errorMessage: Message = {
-        id: Date.now() + 1,
+        id: uuidv4(),
         content:
           error instanceof Error ? error.message : "An unknown error occurred.",
         sender: "system",
@@ -487,6 +488,36 @@ export default function DatabaseQueryApp() {
       setIsStreaming(false);
       setStopStreaming(false);
       stopStreamingRef.current = false;
+      
+      // Refresh conversation messages to get actual database IDs after streaming completes
+      if (conversationId) {
+        setTimeout(async () => {
+          try {
+            const response = await fetch(
+              `${BASE_PATH}/api/conversations/${conversationId}?connectionId=${selectedConnectionId}`
+            );
+            if (response.ok) {
+              const data = await response.json();
+              const updatedMessages = data.messages.map((msg: Message) => {
+                if (msg.sender === "system" && msg.content.startsWith("```sql")) {
+                  let sqlContent = msg.content
+                    .replace("```sql", "")
+                    .replace("```", "")
+                    .trim();
+                  if (sqlContent === "") {
+                    sqlContent = "Knowledge insufficient, please provide more information."
+                  }
+                  return { ...msg, sql: sqlContent };
+                }
+                return msg;
+              });
+              setMessages(updatedMessages);
+            }
+          } catch (error) {
+            console.error("Error refreshing conversation messages:", error);
+          }
+        }, 500); // Small delay to ensure database operations are complete
+      }
     }
   };
 
@@ -504,7 +535,7 @@ export default function DatabaseQueryApp() {
     return sideEffectKeywords.some((keyword) => new RegExp(`\\b${keyword}\\b`, 'i').test(upperCaseSql));
   };
 
-  const runSQL = async (sql: string, messageId: number) => {
+  const runSQL = async (sql: string, messageId: string) => {
     if (checkForSideEffects(sql)) {
       setPendingSql({ sql, messageId });
       setShowConfirmDialog(true);
@@ -515,7 +546,7 @@ export default function DatabaseQueryApp() {
     }
   };
 
-  const explainSQL = async (sql: string, messageId: number) => {
+  const explainSQL = async (sql: string, messageId: string) => {
     setLoadingOperation({ type: 'explain', messageId });
     const explainSql = `EXPLAIN ${sql}`;
     await executeSql(explainSql, messageId);
@@ -531,7 +562,7 @@ export default function DatabaseQueryApp() {
     setCurrentConversation(filteredConversations || []);
   }
 
-  const executeSql = async (sql: string, messageId: number) => {
+  const executeSql = async (sql: string, messageId: string) => {
     setIsStreaming(true);
     setStopStreaming(false);
     stopStreamingRef.current = false;
@@ -732,7 +763,7 @@ export default function DatabaseQueryApp() {
     return format(japanTime, "yyyy-MM-dd HH:mm:ss");
   };
 
-  const copyToClipboard = (text: string, messageId: number) => {
+  const copyToClipboard = (text: string, messageId: string) => {
     navigator.clipboard.writeText(text).then(
       () => {
         setCopySuccessId(messageId);
@@ -746,13 +777,13 @@ export default function DatabaseQueryApp() {
     );
   };
 
-  const handleSqlEdit = (messageId: number, sqlIndex: number, sql: string) => {
+  const handleSqlEdit = (messageId: string, sqlIndex: number, sql: string) => {
     setMessages(prev => prev.map(msg =>
       msg.id === messageId ? { ...msg, [`editedSql_${sqlIndex}`]: sql } : msg
     ));
   };
 
-  const handleSqlSave = async (messageId: number, sqlIndex: number) => {
+  const handleSqlSave = async (messageId: string, sqlIndex: number) => {
     const message = messages.find(msg => msg.id === messageId);
     if (!message) return;
 
@@ -824,8 +855,20 @@ export default function DatabaseQueryApp() {
     }
   };
 
-  const handleShareMessage = async (messageId: number) => {
+  const handleShareMessage = async (messageId: string) => {
     try {
+      // Check if this is a recent message that might not be saved yet
+      const message = messages.find(msg => msg.id === messageId);
+      const isRecentMessage = message && (Date.now() - new Date(message.timestamp).getTime()) < 5000; // Less than 5 seconds old
+      
+      if (isRecentMessage) {
+        toast({
+          title: "Please wait",
+          description: "Message is being saved. Please try again in a moment.",
+        });
+        return;
+      }
+
       const response = await fetch(`/api/messages/${messageId}/share`, {
         method: 'POST',
       });
@@ -835,7 +878,13 @@ export default function DatabaseQueryApp() {
         
         // Handle specific error cases
         if (response.status === 404) {
-          throw new Error(errorData.error || 'Message not found or has been deleted');
+          // If message not found, suggest waiting and trying again
+          toast({
+            title: "Message not ready",
+            description: "The message is still being processed. Please wait a moment and try again.",
+            variant: "destructive",
+          });
+          return;
         } else if (response.status === 400) {
           throw new Error(errorData.error || 'Invalid message');
         } else {
@@ -875,7 +924,7 @@ export default function DatabaseQueryApp() {
     }
   };
 
-  const handleEmbedMessage = async (messageId: number) => {
+  const handleEmbedMessage = async (messageId: string) => {
     setEmbedLoading(true);
     try {
       // First, get the share token (reuse share endpoint)
@@ -1677,7 +1726,7 @@ export default function DatabaseQueryApp() {
                             key={connection.id}
                             className={`list-item px-2 py-1 cursor-pointer flex items-center ${
                               selectedConnectionId === connection.id 
-                              ? "selected font-medium text-foreground dark:text-foreground pl-1" 
+                              ? "selected font-medium text-foreground dark:text-foreground pl-2" 
                               : "text-foreground dark:text-foreground"
                             }`}
                             onClick={() => handleConnectionSelect(connection.id)}
@@ -1915,7 +1964,7 @@ export default function DatabaseQueryApp() {
                               aria-selected={highlightedIndex === idx}
                               className={`list-item px-3 py-2 cursor-pointer text-sm ${
                                 highlightedIndex === idx
-                                  ? 'selected font-medium text-foreground dark:text-foreground pl-1' 
+                                  ? 'selected font-medium text-foreground dark:text-foreground pl-3' 
                                   : 'text-foreground dark:text-foreground'
                               }`}
                               onMouseDown={() => {

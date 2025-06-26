@@ -59,7 +59,7 @@ export const DatabaseSidebar: React.FC<DatabaseSidebarProps> = ({
             {filteredConnections.map((connection) => (
               <li 
                 key={connection.id}
-                className={`list-item px-2 py-1 cursor-pointer flex items-center ${selectedConnectionId === connection.id ? "selected font-medium text-foreground dark:text-foreground pl-1" : "text-foreground dark:text-foreground"}`}
+                className={`list-item px-2 py-1 cursor-pointer flex items-center ${selectedConnectionId === connection.id ? "selected font-medium text-foreground 2" : "text-foreground dark:text-foreground"}`}
                 onClick={() => handleConnectionSelect(connection.id)}
               >
                 <div className="flex items-center w-full">

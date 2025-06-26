@@ -20,12 +20,21 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         }
 
         // Get table statistics
-        const stats: any = {};
+        const stats: any = {
+            recordCount: null,
+            estimatedRows: null,
+            dataLength: null,
+            indexLength: null,
+            createTime: null,
+            updateTime: null,
+            comment: null
+        };
 
         try {
             // Get record count
             const countResult = await executeQuery(`SELECT COUNT(*) as count FROM \`${tableName}\`;`, connectionId, userId);
-            stats.recordCount = countResult[0]?.count || 0;
+            const count = countResult[0]?.count;
+            stats.recordCount = (count !== null && count !== undefined) ? Number(count) : null;
         } catch (error) {
             console.warn(`Could not get record count for table ${tableName}:`, error);
             stats.recordCount = null;
@@ -48,19 +57,19 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
             if (tableInfoResult.length > 0) {
                 const info = tableInfoResult[0];
-                stats.estimatedRows = info.TABLE_ROWS;
-                stats.dataLength = info.DATA_LENGTH;
-                stats.indexLength = info.INDEX_LENGTH;
-                stats.createTime = info.CREATE_TIME;
-                stats.updateTime = info.UPDATE_TIME;
-                stats.comment = info.TABLE_COMMENT;
+                stats.estimatedRows = (info.TABLE_ROWS !== null && info.TABLE_ROWS !== undefined) ? Number(info.TABLE_ROWS) : null;
+                stats.dataLength = (info.DATA_LENGTH !== null && info.DATA_LENGTH !== undefined) ? Number(info.DATA_LENGTH) : null;
+                stats.indexLength = (info.INDEX_LENGTH !== null && info.INDEX_LENGTH !== undefined) ? Number(info.INDEX_LENGTH) : null;
+                stats.createTime = info.CREATE_TIME || null;
+                stats.updateTime = info.UPDATE_TIME || null;
+                stats.comment = info.TABLE_COMMENT || null;
                 
                 // Debug logging
                 console.log(`Table ${tableName} stats:`, {
-                    updateTime: info.UPDATE_TIME,
-                    createTime: info.CREATE_TIME,
-                    dataLength: info.DATA_LENGTH,
-                    tableRows: info.TABLE_ROWS
+                    updateTime: stats.updateTime,
+                    createTime: stats.createTime,
+                    dataLength: stats.dataLength,
+                    tableRows: stats.estimatedRows
                 });
             }
         } catch (error) {
@@ -73,16 +82,16 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
                 const statusResult = await executeQuery(`SHOW TABLE STATUS LIKE '${tableName}';`, connectionId, userId);
                 if (statusResult.length > 0) {
                     const status = statusResult[0];
-                    stats.updateTime = status.Update_time;
-                    stats.createTime = stats.createTime || status.Create_time;
-                    stats.dataLength = stats.dataLength || status.Data_length;
-                    stats.estimatedRows = stats.estimatedRows || status.Rows;
+                    stats.updateTime = status.Update_time || null;
+                    stats.createTime = stats.createTime || status.Create_time || null;
+                    stats.dataLength = stats.dataLength || (status.Data_length ? Number(status.Data_length) : null);
+                    stats.estimatedRows = stats.estimatedRows || (status.Rows ? Number(status.Rows) : null);
                     
                     console.log(`Table ${tableName} status:`, {
-                        updateTime: status.Update_time,
-                        createTime: status.Create_time,
-                        dataLength: status.Data_length,
-                        rows: status.Rows
+                        updateTime: stats.updateTime,
+                        createTime: stats.createTime,
+                        dataLength: stats.dataLength,
+                        rows: stats.estimatedRows
                     });
                 }
             } catch (error) {

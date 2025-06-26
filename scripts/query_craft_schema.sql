@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS conversations (
 
 -- Create messages table
 CREATE TABLE IF NOT EXISTS messages (
-    id INT AUTO_INCREMENT PRIMARY KEY,
+    id VARCHAR(36) PRIMARY KEY,
     conversationId INT,
     content TEXT,
     sender ENUM('user', 'system'),
