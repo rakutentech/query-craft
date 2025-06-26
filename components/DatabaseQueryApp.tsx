@@ -905,9 +905,9 @@ export default function DatabaseQueryApp() {
     if (selectedTables.length === 1) {
       const table = selectedTables[0];
       if (table.fields.length === 0) {
-        queryMessage += `select all fields from the ${table.name} table.`;
+        queryMessage += `select all fields from the ${table.name} table with LIMIT 10 records.`;
       } else {
-        queryMessage += `select the following fields: ${table.fields.join(', ')} from the ${table.name} table.`;
+        queryMessage += `select the following fields: ${table.fields.join(', ')} from the ${table.name} table with LIMIT 10 records.`;
       }
     } else {
       queryMessage += "join the following tables and select the specified fields:\n\n";
@@ -918,7 +918,7 @@ export default function DatabaseQueryApp() {
           queryMessage += `${index + 1}. Table: ${table.name} - select fields: ${table.fields.join(', ')}\n`;
         }
       });
-      queryMessage += "\nPlease create an appropriate JOIN query based on the relationships between these tables.";
+      queryMessage += "\nPlease create an appropriate JOIN query based on the relationships between these tables and add LIMIT 10 to show only the first 10 records.";
     }
 
     setInputMessage(queryMessage);
