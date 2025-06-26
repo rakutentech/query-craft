@@ -673,9 +673,10 @@ export default function SettingsPage() {
                         handleDatabaseInputChange(index, "tag", e.target.value)
                       }
                       placeholder="Enter tags (comma-separated)"
+                      readOnly
                     />
                     <p className="text-sm text-gray-500 mt-1">
-                      Separate multiple tags with commas
+                      Tags are read-only and managed automatically
                     </p>
                   </div>
                   <div>
