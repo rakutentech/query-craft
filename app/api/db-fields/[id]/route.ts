@@ -22,12 +22,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         // Use DESCRIBE to get column information
         const result = await executeQuery(`DESCRIBE \`${tableName}\`;`, connectionId, userId);
         const fields = result.map((row: any) => ({
-            name: row.Field,
-            type: row.Type,
+            name: row.Field || '',
+            type: row.Type || '',
             nullable: row.Null === 'YES',
-            key: row.Key,
-            default: row.Default,
-            extra: row.Extra
+            key: row.Key || '',
+            default: row.Default || null,
+            extra: row.Extra || ''
         }));
 
         return NextResponse.json(fields, { status: 200 });

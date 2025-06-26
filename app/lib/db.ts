@@ -10,6 +10,7 @@ import util from 'util';
 import { exec } from 'child_process';
 import path from 'path';
 import crypto from 'crypto';
+import { v4 as uuidv4 } from 'uuid';
 
 // Cache for database connection pools
 interface ConnectionPoolCache {
@@ -48,7 +49,7 @@ const pgPools: ConnectionPoolCache = {};
 const mariadbPools: ConnectionPoolCache = {}
 
 export interface Message {
-  id: number;
+  id: string;
   conversationId: number;
   content: string;
   sender: "user" | "system";
@@ -233,20 +234,25 @@ export async function createConversation(
 export async function addMessage(
   conversationId: number,
   content: string,
-  sender: "user" | "system"
-): Promise<void> {
+  sender: "user" | "system",
+  messageId?: string
+): Promise<string> {
   const db = await getDb();
+  const id = messageId || uuidv4();
+  
   if (databaseConfig.type === 'mysql') {
     await (db as mysql.Pool).execute(
-      'INSERT INTO messages (conversationId, content, sender, timestamp) VALUES (?, ?, ?, NOW())',
-      [conversationId, content, sender]
+      'INSERT INTO messages (id, conversationId, content, sender, timestamp) VALUES (?, ?, ?, ?, NOW())',
+      [id, conversationId, content, sender]
     );
   } else {
     await (db as SQLiteDatabase).run(
-      'INSERT INTO messages (conversationId, content, sender, timestamp) VALUES (?, ?, ?, datetime("now"))',
-      [conversationId, content, sender]
+      'INSERT INTO messages (id, conversationId, content, sender, timestamp) VALUES (?, ?, ?, ?, datetime("now"))',
+      [id, conversationId, content, sender]
     );
   }
+  
+  return id;
 }
 
 export async function getConversationMessages(
@@ -1336,7 +1342,7 @@ export async function storeUser(user: User): Promise<void> {
   }
 }
 
-export async function generateShareToken(messageId: number): Promise<string> {
+export async function generateShareToken(messageId: string): Promise<string> {
   const db = await getDb();
 
   try {
@@ -1611,7 +1617,7 @@ export async function getUserMessageRecommendations(userId: string, limit: strin
   }
 }
 
-export async function getMessageById(id: number): Promise<Message | null> {
+export async function getMessageById(id: string): Promise<Message | null> {
   const db = await getDb();
   try {
     if (databaseConfig.type === 'mysql') {
@@ -1641,7 +1647,7 @@ export async function getMessageById(id: number): Promise<Message | null> {
 }
 
 // update message content by id
-export async function updateMessageById(id: number, content: string): Promise<void> {
+export async function updateMessageById(id: string, content: string): Promise<void> {
   const db = await getDb();
   try {
     if (databaseConfig.type === 'mysql') {

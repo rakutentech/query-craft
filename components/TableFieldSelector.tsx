@@ -353,25 +353,32 @@ export default function TableFieldSelector({
 
   // Utility functions
   const formatBytes = (bytes: number | null) => {
-    if (bytes === null || bytes === 0) return '0 B';
+    if (bytes === null || bytes === undefined || bytes === 0) return '0 B';
     const k = 1024;
     const sizes = ['B', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const formatNumber = (num: number | null) => {
-    if (num === null) return 'N/A';
+  const formatNumber = (num: number | null | undefined) => {
+    if (num === null || num === undefined) return null;
     return num.toLocaleString();
   };
 
-  const formatDate = (dateStr: string | null) => {
-    if (!dateStr) return 'N/A';
+  const formatDate = (dateStr: string | null | undefined) => {
+    if (!dateStr || dateStr === 'null' || dateStr === 'undefined') return null;
     try {
-      return new Date(dateStr).toLocaleDateString() + ' ' + new Date(dateStr).toLocaleTimeString();
+      const date = new Date(dateStr);
+      if (isNaN(date.getTime())) return null;
+      return date.toLocaleDateString();
     } catch {
-      return 'N/A';
+      return null;
     }
+  };
+
+  const hasValidStats = (stats: TableStats | undefined) => {
+    if (!stats) return false;
+    return stats.recordCount !== null || stats.dataLength !== null || stats.updateTime || stats.createTime;
   };
 
   // Filter and sort tables
@@ -392,16 +399,18 @@ export default function TableFieldSelector({
           bValue = b.toLowerCase();
           break;
         case 'records':
-          aValue = tableStats[a]?.recordCount ?? -1;
-          bValue = tableStats[b]?.recordCount ?? -1;
+          aValue = tableStats[a]?.recordCount ?? 0;
+          bValue = tableStats[b]?.recordCount ?? 0;
           break;
         case 'size':
-          aValue = tableStats[a]?.dataLength ?? -1;
-          bValue = tableStats[b]?.dataLength ?? -1;
+          aValue = tableStats[a]?.dataLength ?? 0;
+          bValue = tableStats[b]?.dataLength ?? 0;
           break;
         case 'updated':
-          aValue = tableStats[a]?.updateTime ? new Date(tableStats[a].updateTime!).getTime() : -1;
-          bValue = tableStats[b]?.updateTime ? new Date(tableStats[b].updateTime!).getTime() : -1;
+          const aUpdateTime = tableStats[a]?.updateTime || tableStats[a]?.createTime;
+          const bUpdateTime = tableStats[b]?.updateTime || tableStats[b]?.createTime;
+          aValue = aUpdateTime ? new Date(aUpdateTime).getTime() : 0;
+          bValue = bUpdateTime ? new Date(bUpdateTime).getTime() : 0;
           break;
         default:
           aValue = a.toLowerCase();
@@ -546,33 +555,43 @@ export default function TableFieldSelector({
                         {/* Table Statistics - Right Side */}
                         {loadingStats.has(tableName) ? (
                           <div className="text-xs text-muted-foreground">Loading...</div>
-                        ) : tableStats[tableName] ? (
+                        ) : hasValidStats(tableStats[tableName]) ? (
                           <div className="flex items-center space-x-3 text-xs text-muted-foreground">
-                            <div className="flex items-center space-x-1">
-                              <span>📊</span>
-                              <span>{formatNumber(tableStats[tableName].recordCount)}</span>
-                            </div>
-                            {tableStats[tableName].dataLength !== null && (
+                            {formatNumber(tableStats[tableName]?.recordCount) && (
+                              <div className="flex items-center space-x-1">
+                                <span>📊</span>
+                                <span>{formatNumber(tableStats[tableName].recordCount)}</span>
+                              </div>
+                            )}
+                            {tableStats[tableName]?.dataLength !== null && tableStats[tableName]?.dataLength !== undefined && (
                               <div className="flex items-center space-x-1">
                                 <span>💾</span>
                                 <span>{formatBytes(tableStats[tableName].dataLength)}</span>
                               </div>
                             )}
-                            {tableStats[tableName].updateTime ? (
-                              <div className="flex items-center space-x-1">
-                                <span>🕒</span>
-                                <span>{new Date(tableStats[tableName].updateTime!).toLocaleDateString()}</span>
-                              </div>
-                            ) : tableStats[tableName].createTime ? (
-                              <div className="flex items-center space-x-1">
-                                <span>📅</span>
-                                <span>{new Date(tableStats[tableName].createTime!).toLocaleDateString()}</span>
-                              </div>
-                            ) : null}
+                            {(() => {
+                              const updateDate = formatDate(tableStats[tableName]?.updateTime);
+                              const createDate = formatDate(tableStats[tableName]?.createTime);
+                              
+                              if (updateDate) {
+                                return (
+                                  <div className="flex items-center space-x-1">
+                                    <span>🕒</span>
+                                    <span>{updateDate}</span>
+                                  </div>
+                                );
+                              } else if (createDate) {
+                                return (
+                                  <div className="flex items-center space-x-1">
+                                    <span>📅</span>
+                                    <span>{createDate}</span>
+                                  </div>
+                                );
+                              }
+                              return null;
+                            })()}
                           </div>
-                        ) : (
-                          <div className="text-xs text-muted-foreground">No stats</div>
-                        )}
+                        ) : null}
                         
                         {isTableSelected(tableName) && (
                           <Badge variant="outline" className="text-xs">
@@ -609,10 +628,16 @@ export default function TableFieldSelector({
                             </div>
                           <div className="grid grid-cols-1 gap-2">
                             {tableFields[tableName]
-                              .filter(field =>
-                                searchTerm === "" ||
-                                field.name.toLowerCase().includes(searchTerm.toLowerCase())
-                              )
+                              .filter(field => {
+                                // If no search term, show all fields
+                                if (searchTerm === "") return true;
+                                
+                                // If table name matches search term, show all fields for this table
+                                if (tableName.toLowerCase().includes(searchTerm.toLowerCase())) return true;
+                                
+                                // Otherwise, only show fields that match the search term
+                                return field.name.toLowerCase().includes(searchTerm.toLowerCase());
+                              })
                               .map(field => (
                               <div
                                 key={field.name}

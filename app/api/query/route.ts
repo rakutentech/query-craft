@@ -18,6 +18,7 @@ import {generateLMStudioChatResponse} from "@/app/lib/lm-studio";
 import {generateOllamaChatResponse} from "@/app/lib/ollama";
 import {generateAzureChatResponse} from "@/app/lib/azure-ai";
 import { ChatInput } from "@lmstudio/sdk";
+import { v4 as uuidv4 } from 'uuid';
 
 const stopFlags = new Map<number, boolean>();
 
@@ -50,8 +51,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Add user message to the conversation
-    await addMessage(currentConversationId, query, "user");
+    // Add user message to the conversation with generated UUID
+    const userMessageId = await addMessage(currentConversationId, query, "user");
 
     // Get conversation history
     const conversationHistory = await getConversationMessages(
@@ -98,12 +99,14 @@ export async function POST(request: NextRequest) {
         ];
 
         aiStream = await generateAzureChatResponse(providerConfig.config.azure, messages);
+        const systemMessageId1 = uuidv4();
         stream = await createAIStream({
           aiStream,
           encoder,
           currentConversationId,
           conversationId,
           query,
+          systemMessageId: systemMessageId1,
           getConversationMessages,
           addMessage,
           updateConversationTitle
@@ -132,12 +135,14 @@ export async function POST(request: NextRequest) {
         ];
 
         aiStream = await generateOllamaChatResponse(providerConfig.config.ollama, ollamaMessages);
+        const systemMessageId2 = uuidv4();
         stream = await createAIStream({
           aiStream,
           encoder,
           currentConversationId,
           conversationId,
           query,
+          systemMessageId: systemMessageId2,
           getConversationMessages,
           addMessage,
           updateConversationTitle
@@ -167,12 +172,14 @@ export async function POST(request: NextRequest) {
         ];
         // Generate response from LM Studio
         aiStream = await generateLMStudioChatResponse(providerConfig.config.lmStudio, lmStudioMessages as ChatInput);
+        const systemMessageId3 = uuidv4();
         stream = await createAIStream({
           aiStream,
           encoder,
           currentConversationId,
           conversationId,
           query,
+          systemMessageId: systemMessageId3,
           getConversationMessages,
           addMessage,
           updateConversationTitle
@@ -200,12 +207,14 @@ export async function POST(request: NextRequest) {
         ];
         // // Generate response from Claude
         aiStream = await generateClaudeChatResponse(providerConfig.config.claude, fullSystemPrompt, claudeMessages);
+        const systemMessageId4 = uuidv4();
         stream = await createAIStream({
           aiStream,
           encoder,
           currentConversationId,
           conversationId,
           query,
+          systemMessageId: systemMessageId4,
           getConversationMessages,
           addMessage,
           updateConversationTitle
@@ -243,12 +252,14 @@ export async function POST(request: NextRequest) {
         ];
 
         aiStream = await generateOpenAIChatResponse(providerConfig.config.openai, openaiMessages);
+        const systemMessageId5 = uuidv4();
         stream = await createAIStream({
           aiStream,
           encoder,
           currentConversationId,
           conversationId,
           query,
+          systemMessageId: systemMessageId5,
           getConversationMessages,
           addMessage,
           updateConversationTitle
@@ -301,6 +312,7 @@ async function createAIStream({
                                 currentConversationId,
                                 conversationId,
                                 query,
+                                systemMessageId,
                                 getConversationMessages,
                                 addMessage,
                                 updateConversationTitle
@@ -310,8 +322,9 @@ async function createAIStream({
   currentConversationId: number;
   conversationId: number | undefined;
   query: string;
+  systemMessageId: string;
   getConversationMessages: (id: number) => Promise<any>;
-  addMessage: (id: number, content: string, sender: "user" | "system") => Promise<void>;
+  addMessage: (id: number, content: string, sender: "user" | "system", messageId?: string) => Promise<string>;
   updateConversationTitle: (id: number, title: string) => Promise<void>;
 }) {
   let accumulated = "";
@@ -340,7 +353,7 @@ async function createAIStream({
       } finally {
         controller.close();
         // Store the full response in conversation history
-        await addMessage(currentConversationId, accumulated, "system");
+        await addMessage(currentConversationId, accumulated, "system", systemMessageId);
         if (!conversationId) {
           await updateConversationTitle(currentConversationId, query.substring(0, 50) + "...");
         }

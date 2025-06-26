@@ -59,7 +59,7 @@ async function initializeDatabase() {
     );
 
     CREATE TABLE IF NOT EXISTS messages (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      id TEXT PRIMARY KEY,
       conversationId INTEGER,
       content TEXT,
       sender TEXT CHECK(sender IN ('user', 'system')),
