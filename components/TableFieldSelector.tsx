@@ -609,10 +609,16 @@ export default function TableFieldSelector({
                             </div>
                           <div className="grid grid-cols-1 gap-2">
                             {tableFields[tableName]
-                              .filter(field =>
-                                searchTerm === "" ||
-                                field.name.toLowerCase().includes(searchTerm.toLowerCase())
-                              )
+                              .filter(field => {
+                                // If no search term, show all fields
+                                if (searchTerm === "") return true;
+                                
+                                // If table name matches search term, show all fields for this table
+                                if (tableName.toLowerCase().includes(searchTerm.toLowerCase())) return true;
+                                
+                                // Otherwise, only show fields that match the search term
+                                return field.name.toLowerCase().includes(searchTerm.toLowerCase());
+                              })
                               .map(field => (
                               <div
                                 key={field.name}

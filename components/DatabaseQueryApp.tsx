@@ -214,6 +214,24 @@ export default function DatabaseQueryApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Add beforeunload event listener to prevent accidental navigation
+  useEffect(() => {
+    const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+      // Only show confirmation if there are active messages or ongoing operations
+      if (messages.length > 0 || isLoading || isStreaming) {
+        event.preventDefault();
+        event.returnValue = 'You have unsaved work. Are you sure you want to leave?';
+        return 'You have unsaved work. Are you sure you want to leave?';
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
+  }, [messages.length, isLoading, isStreaming]);
+
   useEffect(() => {
     if (selectedConnectionId !== null) {
       fetchConversationsByConnection(selectedConnectionId);
@@ -918,7 +936,57 @@ export default function DatabaseQueryApp() {
           queryMessage += `${index + 1}. Table: ${table.name} - select fields: ${table.fields.join(', ')}\n`;
         }
       });
+      
+      // Add intelligent guidance for potential join relationships
       queryMessage += "\nPlease create an appropriate JOIN query based on the relationships between these tables and add LIMIT 10 to show only the first 10 records.";
+      
+      // Analyze table names for potential relationships
+      const tableNames = selectedTables.map(t => t.name.toLowerCase());
+      const potentialJoinHints = [];
+      
+      // Look for common patterns that suggest relationships
+      const commonIdPatterns = ['id', '_id', 'user_id', 'customer_id', 'order_id', 'product_id', 'category_id'];
+      const commonForeignKeyPatterns = tableNames.map(name => [`${name}_id`, `${name.replace(/s$/, '')}_id`]).flat();
+      
+      // Check for potential foreign key relationships
+      for (let i = 0; i < tableNames.length; i++) {
+        for (let j = i + 1; j < tableNames.length; j++) {
+          const table1 = tableNames[i];
+          const table2 = tableNames[j];
+          
+          // Check if one table name appears in the other (e.g., "user" and "user_orders")
+          if (table1.includes(table2) || table2.includes(table1)) {
+            potentialJoinHints.push(`${table1} and ${table2} may be related`);
+          }
+          
+          // Check for common naming patterns
+          const singular1 = table1.replace(/s$/, '');
+          const singular2 = table2.replace(/s$/, '');
+          
+          if (commonForeignKeyPatterns.includes(`${singular1}_id`) || commonForeignKeyPatterns.includes(`${singular2}_id`)) {
+            potentialJoinHints.push(`Look for ${singular1}_id or ${singular2}_id fields`);
+          }
+        }
+      }
+      
+      // Add hints if tables might not be directly joinable
+      if (potentialJoinHints.length === 0 && selectedTables.length > 2) {
+        queryMessage += "\n\n⚠️ **Important**: If these tables don't have direct relationships, consider:";
+        queryMessage += "\n- Using UNION instead of JOIN if the tables have similar structures";
+        queryMessage += "\n- Creating separate queries for each table";
+        queryMessage += "\n- Looking for intermediate/junction tables that might connect them";
+        queryMessage += `\n- Common joining patterns to look for: ${commonIdPatterns.join(', ')}`;
+      } else if (potentialJoinHints.length > 0) {
+        queryMessage += "\n\n💡 **Potential relationships detected**:";
+        potentialJoinHints.forEach(hint => {
+          queryMessage += `\n- ${hint}`;
+        });
+      }
+      
+      // Add guidance for tables that might not be related
+      if (selectedTables.length > 2) {
+        queryMessage += "\n\nIf some tables cannot be joined directly, please suggest alternative approaches like separate queries or UNION operations where appropriate.";
+      }
     }
 
     setInputMessage(queryMessage);
