@@ -1679,17 +1679,17 @@ export default function DatabaseQueryApp() {
           {showLeftPanel && (
             <div className="w-full lg:w-1/5 lg:min-w-[220px] xl:min-w-[250px] bg-white dark:bg-gray-900 lg:bg-transparent lg:dark:bg-transparent">
               <Card className="mb-2 h-[calc(100vh-350px)] flex flex-col bg-card border border-border shadow-md">
-                <CardHeader className="border-b border-border py-2">
+                <CardHeader className="border-b border-border py-2 flex-shrink-0">
                   <div className="flex justify-between items-center">
                     <h2 className="text-lg font-semibold">
                       Databases
                     </h2>
                   </div>
                 </CardHeader>
-                <CardContent className="p-0">
-                  <div className="flex flex-col h-full">
+                <CardContent className="p-0 flex-1 flex flex-col min-h-0">
+                  <div className="flex flex-col h-full min-h-0">
                     {uniqueTags.length > 0 && (
-                      <div className="mb-2 mt-2 px-2">
+                      <div className="mb-2 mt-2 px-2 flex-shrink-0">
                         <div className="text-xs font-semibold text-muted-foreground dark:text-muted-foreground mb-2">Filter by Tags</div>
                         <div className="flex flex-wrap gap-1 overflow-y-auto">
                           <Button
@@ -1719,22 +1719,22 @@ export default function DatabaseQueryApp() {
                       </div>
                     )}
                     
-                    <ScrollArea className="flex-grow overflow-y-auto">
+                    <div className="flex-1 overflow-y-auto min-h-0">
                       <ul className="divide-y divide-border">
                         {filteredConnections.map((connection) => (
-                          <li 
+                          <li
                             key={connection.id}
                             className={`list-item px-2 py-1 cursor-pointer flex items-center ${
-                              selectedConnectionId === connection.id 
-                              ? "selected font-medium text-foreground dark:text-foreground pl-2" 
+                              selectedConnectionId === connection.id
+                              ? "selected font-medium text-foreground dark:text-foreground pl-2"
                               : "text-foreground dark:text-foreground"
                             }`}
                             onClick={() => handleConnectionSelect(connection.id)}
                           >
                             <div className="flex items-center w-full">
                               <Database className={`h-4 w-4 mr-2 ${
-                                selectedConnectionId === connection.id 
-                                ? "text-primary dark:text-primary" 
+                                selectedConnectionId === connection.id
+                                ? "text-primary dark:text-primary"
                                 : "text-muted-foreground dark:text-muted-foreground"
                               }`} />
                               <span className="text-xs font-medium truncate">{connection.projectName}</span>
@@ -1742,7 +1742,7 @@ export default function DatabaseQueryApp() {
                           </li>
                         ))}
                       </ul>
-                    </ScrollArea>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
