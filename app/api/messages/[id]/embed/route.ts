@@ -1,6 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSharedMessage } from '@/app/lib/db';
 
+/**
+ * Validates and returns a properly formatted base URL with fallback chain
+ */
+function getValidatedBaseUrl(request: NextRequest): string {
+  // Priority order: NEXT_PUBLIC_BASE_URL -> VERCEL_URL -> request host
+  let baseUrl = process.env.NEXT_PUBLIC_BASE_URL;
+  
+  if (!baseUrl && process.env.VERCEL_URL) {
+    baseUrl = `https://${process.env.VERCEL_URL}`;
+  }
+  
+  if (!baseUrl) {
+    const { protocol, host } = request.nextUrl;
+    baseUrl = `${protocol}//${host}`;
+  }
+  
+  // Validate URL format and remove trailing slash
+  try {
+    const url = new URL(baseUrl);
+    return url.origin;
+  } catch (error) {
+    // Fallback to localhost for development if all else fails
+    console.error('Invalid base URL configuration:', error);
+    return 'http://localhost:3000';
+  }
+}
+
+/**
+ * Builds and validates the shared page URL
+ */
+function buildSharedPageUrl(baseUrl: string, token: string): string {
+  // Basic token validation (alphanumeric and common URL-safe characters)
+  if (!/^[a-zA-Z0-9_-]+$/.test(token)) {
+    throw new Error('Invalid token format');
+  }
+  
+  return `${baseUrl}/messages/shared/${encodeURIComponent(token)}`;
+}
+
 // Utility to convert markdown-like SQL blocks to HTML
 function renderMessageContentToHtml(content: string): string {
   // Replace ```sql ... ``` blocks with <pre><code class="sql">...</code></pre>
@@ -23,21 +62,28 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   try {
     const { searchParams } = new URL(request.url);
     const token = searchParams.get('token');
+    
     if (!token) {
       return new NextResponse('Missing token', { status: 400 });
     }
+
+    // Build base URL with proper fallback chain and validation
+    const baseUrl = getValidatedBaseUrl(request);
+    let sharedPageUrl: string;
+    
+    try {
+      sharedPageUrl = buildSharedPageUrl(baseUrl, token);
+    } catch (error) {
+      return new NextResponse('Invalid token format', { status: 400 });
+    }
+
+    console.log('sharedPageUrl', sharedPageUrl);
     const result = await getSharedMessage(token);
     const message = result?.message;
+    
     if (!message) {
       return new NextResponse('Message not found', { status: 404 });
     }
-
-    // Always use the site that generated the embed link (Query Craft)
-    // Use environment variable if available, otherwise fall back to request host
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL ||
-                    process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` :
-                    `${request.nextUrl.protocol}//${request.nextUrl.host}`;
-    const sharedPageUrl = `${baseUrl}/messages/shared/${token}`;
 
     // Minimal HTML for embedding
     return new NextResponse(
@@ -154,7 +200,21 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       { status: 200, headers: { 'Content-Type': 'text/html' } }
     );
   } catch (error) {
-    console.error('Error serving embed:', error);
+    // Use proper logging instead of console.log
+    if (process.env.NODE_ENV === 'development') {
+      console.error('Error serving embed:', error);
+    }
+    
+    // Return appropriate error response based on error type
+    if (error instanceof Error) {
+      if (error.message.includes('Invalid token')) {
+        return new NextResponse('Invalid token format', { status: 400 });
+      }
+      if (error.message.includes('not found')) {
+        return new NextResponse('Resource not found', { status: 404 });
+      }
+    }
+    
     return new NextResponse('Internal Server Error', { status: 500 });
   }
 }
