@@ -5,7 +5,8 @@ import {
   getConversationMessages,
   updateConversationTitle,
   getSettings,
-  getUserConnectionById
+  getUserConnectionById,
+  updateMessageById
 } from "@/app/lib/db";
 import {Message} from "ollama";
 import OpenAI from "openai";
@@ -328,6 +329,7 @@ async function createAIStream({
   updateConversationTitle: (id: number, title: string) => Promise<void>;
 }) {
   let accumulated = "";
+  let messageCreated = false;
 
   return new ReadableStream({
     async start(controller) {
@@ -348,12 +350,26 @@ async function createAIStream({
           if (done) break;
           const chunk = typeof value === "string" ? value : new TextDecoder().decode(value);
           accumulated += chunk;
+          
+          // Create the message in database as soon as we have some content
+          if (!messageCreated && accumulated.trim().length > 0) {
+            await addMessage(currentConversationId, accumulated, "system", systemMessageId);
+            messageCreated = true;
+          }
+          
           controller.enqueue(typeof value === "string" ? encoder.encode(value) : value);
         }
       } finally {
         controller.close();
-        // Store the full response in conversation history
-        await addMessage(currentConversationId, accumulated, "system", systemMessageId);
+        // Update the message with final content if it was created, otherwise create it
+        if (messageCreated) {
+          // Update the existing message with final content
+          await updateMessageById(systemMessageId, accumulated);
+        } else {
+          // Create the message if no content was streamed
+          await addMessage(currentConversationId, accumulated, "system", systemMessageId);
+        }
+        
         if (!conversationId) {
           await updateConversationTitle(currentConversationId, query.substring(0, 50) + "...");
         }

@@ -16,10 +16,30 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: 'Invalid message ID format' }, { status: 400 });
     }
 
-    // Add a small delay to allow for any pending database operations to complete
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Retry mechanism for recently created messages
+    let shareToken;
+    let attempts = 0;
+    const maxAttempts = 3;
+    
+    while (attempts < maxAttempts) {
+      try {
+        // Add a small delay to allow for any pending database operations to complete
+        if (attempts > 0) {
+          await new Promise(resolve => setTimeout(resolve, 200 * attempts));
+        }
+        
+        shareToken = await generateShareToken(messageId);
+        break;
+      } catch (error) {
+        attempts++;
+        if (error instanceof Error && error.message === 'Message not found' && attempts < maxAttempts) {
+          // Wait a bit longer for the message to be saved
+          continue;
+        }
+        throw error;
+      }
+    }
 
-    const shareToken = await generateShareToken(messageId);
     return NextResponse.json({ token: shareToken });
   } catch (error) {
     console.error('Error generating share token:', error);

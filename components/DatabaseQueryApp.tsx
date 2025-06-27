@@ -859,14 +859,11 @@ export default function DatabaseQueryApp() {
     try {
       // Check if this is a recent message that might not be saved yet
       const message = messages.find(msg => msg.id === messageId);
-      const isRecentMessage = message && (Date.now() - new Date(message.timestamp).getTime()) < 5000; // Less than 5 seconds old
+      const isRecentMessage = message && (Date.now() - new Date(message.timestamp).getTime()) < 3000; // Less than 3 seconds old
       
+      // For recent messages, add a small delay to allow database operations to complete
       if (isRecentMessage) {
-        toast({
-          title: "Please wait",
-          description: "Message is being saved. Please try again in a moment.",
-        });
-        return;
+        await new Promise(resolve => setTimeout(resolve, 500));
       }
 
       const response = await fetch(`/api/messages/${messageId}/share`, {
@@ -927,6 +924,15 @@ export default function DatabaseQueryApp() {
   const handleEmbedMessage = async (messageId: string) => {
     setEmbedLoading(true);
     try {
+      // Check if this is a recent message that might not be saved yet
+      const message = messages.find(msg => msg.id === messageId);
+      const isRecentMessage = message && (Date.now() - new Date(message.timestamp).getTime()) < 3000; // Less than 3 seconds old
+      
+      // For recent messages, add a small delay to allow database operations to complete
+      if (isRecentMessage) {
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
       // First, get the share token (reuse share endpoint)
       const response = await fetch(`/api/messages/${messageId}/share`, { method: 'POST' });
       
