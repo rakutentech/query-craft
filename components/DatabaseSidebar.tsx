@@ -21,15 +21,15 @@ export const DatabaseSidebar: React.FC<DatabaseSidebarProps> = ({
   handleConnectionSelect,
 }) => (
   <Card className="mb-2 h-[calc(100vh-350px)] flex flex-col bg-card border border-border shadow-md">
-    <CardHeader className="border-b border-border py-2">
+    <CardHeader className="border-b border-border py-2 flex-shrink-0">
       <div className="flex justify-between items-center">
         <h2 className="text-lg font-semibold">Databases</h2>
       </div>
     </CardHeader>
-    <CardContent className="p-0">
-      <div className="flex flex-col h-full">
+    <CardContent className="p-0 flex-1 flex flex-col min-h-0">
+      <div className="flex flex-col h-full min-h-0">
         {uniqueTags.length > 0 && (
-          <div className="mb-2 mt-2 px-2">
+          <div className="mb-2 mt-2 px-2 flex-shrink-0">
             <div className="text-xs font-semibold text-muted-foreground dark:text-muted-foreground mb-2">Filter by Tags</div>
             <div className="flex flex-wrap gap-1 overflow-y-auto">
               <Button
@@ -54,7 +54,7 @@ export const DatabaseSidebar: React.FC<DatabaseSidebarProps> = ({
             </div>
           </div>
         )}
-        <div className="flex-grow overflow-y-auto">
+        <div className="flex-1 overflow-y-auto min-h-0">
           <ul className="divide-y divide-border">
             {filteredConnections.map((connection) => (
               <li 
