@@ -179,6 +179,15 @@ export default function DatabaseQueryApp() {
   const [showRecommendations, setShowRecommendations] = useState(false);
   const recommendationsRef = useRef<HTMLDivElement>(null);
 
+  // Chat panel selector state - defaults to TagCloud, with localStorage persistence
+  const [chatPanelMode, setChatPanelMode] = useState<'tagcloud' | 'fieldselector'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('chatPanelMode') as 'tagcloud' | 'fieldselector') || 'tagcloud';
+    }
+    return 'tagcloud';
+  });
+  const [selectedTablesFromTagCloud, setSelectedTablesFromTagCloud] = useState<string[]>([]);
+
   // Embed functionality state
   const [showEmbedDialog, setShowEmbedDialog] = useState(false);
   const [embedCode, setEmbedCode] = useState('');
@@ -189,18 +198,13 @@ export default function DatabaseQueryApp() {
 
   useEffect(() => {
     let isMounted = true;
-    // Try to load cached databaseConnections for instant display
-    const cached = localStorage.getItem('dbConnectionsCache');
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        setDatabaseConnections(parsed);
-        setAppLoading(false);
-      } catch (err) {
-        console.error('Error parsing dbConnectionsCache:', err);
-        // Do not interrupt the app, just continue
-      }
-    }
+    
+    // Clean up expired cache entries first
+    cleanupCache();
+    
+    // Load all cached data for instant display
+    loadCachedData();
+    
     const load = async () => {
       try {
         await checkSettings();
@@ -214,6 +218,42 @@ export default function DatabaseQueryApp() {
     return () => { isMounted = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const loadCachedData = () => {
+    try {
+      // Load cached database connections with timestamp validation
+      const cachedConnections = localStorage.getItem('dbConnectionsCache');
+      if (cachedConnections) {
+        const parsed = JSON.parse(cachedConnections);
+        // Handle both old format (array) and new format (object with timestamp)
+        const connections = parsed.connections || parsed;
+        const cacheAge = parsed.timestamp ? Date.now() - parsed.timestamp : 0;
+        
+        // Use cache if less than 30 minutes old
+        if (!parsed.timestamp || cacheAge < 30 * 60 * 1000) {
+          setDatabaseConnections(connections);
+          if (connections.length > 0) {
+            setSelectedConnectionId(connections[0].id);
+          }
+          setAppLoading(false);
+        }
+      }
+
+      // Load cached selected tag
+      const cachedTag = localStorage.getItem('selectedDatabaseTag');
+      if (cachedTag) {
+        setSelectedTag(cachedTag);
+      }
+
+      // Load cached chat panel mode preference
+      const cachedMode = localStorage.getItem('chatPanelMode');
+      if (cachedMode && (cachedMode === 'tagcloud' || cachedMode === 'fieldselector')) {
+        setChatPanelMode(cachedMode as 'tagcloud' | 'fieldselector');
+      }
+    } catch (err) {
+      console.error('Error loading cached data:', err);
+    }
+  };
 
   // Add beforeunload event listener to prevent accidental navigation
   useEffect(() => {
@@ -264,6 +304,11 @@ export default function DatabaseQueryApp() {
     }
   }, [selectedTag]);
 
+  // Persist chat panel mode preference
+  useEffect(() => {
+    localStorage.setItem('chatPanelMode', chatPanelMode);
+  }, [chatPanelMode]);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
@@ -292,8 +337,15 @@ export default function DatabaseQueryApp() {
       }
       const data = await response.json();
       setDatabaseConnections(data.databaseConnections);
-      localStorage.setItem('dbConnectionsCache', JSON.stringify(data.databaseConnections));
-      if (data.databaseConnections.length > 0) {
+      
+      // Cache with timestamp
+      const cacheData = {
+        connections: data.databaseConnections,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('dbConnectionsCache', JSON.stringify(cacheData));
+      
+      if (data.databaseConnections.length > 0 && !selectedConnectionId) {
         setSelectedConnectionId(data.databaseConnections[0].id);
       }
     } catch (error) {
@@ -301,7 +353,56 @@ export default function DatabaseQueryApp() {
     }
   };
 
+  // Clean up expired cache entries
+  const cleanupCache = () => {
+    const cacheKeys = [
+      'dbConnectionsCache',
+      'selectedDatabaseTag',
+      'chatPanelMode'
+    ];
+    
+    // Clean up dynamic cache keys
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('dbTables_') || key.startsWith('conversations_'))) {
+        try {
+          const cached = localStorage.getItem(key);
+          if (cached) {
+            const cachedData = JSON.parse(cached);
+            const cacheAge = Date.now() - cachedData.timestamp;
+            // Remove cache older than 1 hour
+            if (cacheAge > 60 * 60 * 1000) {
+              localStorage.removeItem(key);
+            }
+          }
+        } catch (err) {
+          // Remove invalid cache entries
+          localStorage.removeItem(key);
+        }
+      }
+    }
+  };
+
   const fetchListOfDBTables = async () => {
+    if (!selectedConnectionId) return;
+    
+    // Check cache first
+    const cacheKey = `dbTables_${selectedConnectionId}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const cachedData = JSON.parse(cached);
+        const cacheAge = Date.now() - cachedData.timestamp;
+        // Cache for 10 minutes
+        if (cacheAge < 10 * 60 * 1000) {
+          setListOfDBTables(cachedData.tables);
+          return;
+        }
+      } catch (err) {
+        console.error('Error parsing cached tables:', err);
+      }
+    }
+
     try {
       const response = await fetch(`${BASE_PATH}/api/db-tables/${selectedConnectionId}`);
       if (!response.ok) {
@@ -309,6 +410,12 @@ export default function DatabaseQueryApp() {
       }
       const data = await response.json();
       setListOfDBTables(data);
+      
+      // Cache the tables
+      localStorage.setItem(cacheKey, JSON.stringify({
+        tables: data,
+        timestamp: Date.now()
+      }));
     } catch (error) {
       console.error("Error fetching database tables:", error);
     }
@@ -319,6 +426,24 @@ export default function DatabaseQueryApp() {
     if (conversationsCache.current.has(connectionId)) {
       setCurrentConversation(conversationsCache.current.get(connectionId)!);
       return;
+    }
+
+    // Check localStorage cache
+    const cacheKey = `conversations_${connectionId}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const cachedData = JSON.parse(cached);
+        const cacheAge = Date.now() - cachedData.timestamp;
+        // Cache conversations for 5 minutes
+        if (cacheAge < 5 * 60 * 1000) {
+          conversationsCache.current.set(connectionId, cachedData.conversations);
+          setCurrentConversation(cachedData.conversations);
+          return;
+        }
+      } catch (err) {
+        console.error('Error parsing cached conversations:', err);
+      }
     }
 
     try {
@@ -338,6 +463,12 @@ export default function DatabaseQueryApp() {
       // Update cache
       conversationsCache.current.set(connectionId, conversations);
       setCurrentConversation(conversations);
+      
+      // Cache to localStorage
+      localStorage.setItem(cacheKey, JSON.stringify({
+        conversations,
+        timestamp: Date.now()
+      }));
     } catch (error) {
       console.error("Error fetching conversations:", error);
     }
@@ -1045,6 +1176,31 @@ export default function DatabaseQueryApp() {
     }
 
     setInputMessage(queryMessage);
+  };
+
+  const handleTagCloudTableClick = (tableName: string) => {
+    setSelectedTablesFromTagCloud(prev => {
+      if (prev.includes(tableName)) {
+        return prev.filter(t => t !== tableName);
+      } else {
+        return [...prev, tableName];
+      }
+    });
+  };
+
+  const handleTagCloudGenerateQuery = () => {
+    if (selectedTablesFromTagCloud.length === 0) return;
+    
+    const selectedTables = selectedTablesFromTagCloud.map(tableName => ({
+      name: tableName,
+      fields: [] // Empty fields array means select all fields
+    }));
+    
+    handleGenerateQueryFromTables(selectedTables);
+  };
+
+  const handleClearTagCloudSelection = () => {
+    setSelectedTablesFromTagCloud([]);
   };
 
   const renderMessage = (message: Message) => {
@@ -1887,15 +2043,82 @@ export default function DatabaseQueryApp() {
                     <div className="space-y-4 h-[calc(80vh-65px)]">
                       {messages.length === 0 && (
                           <div className="h-full">
-                            <p className="text-center text-muted-foreground dark:text-muted-foreground mb-4">
-                              Select tables and fields to generate a query, or start typing your own query below.
-                            </p>
-                            <div className="h-[calc(100%-2rem)]">
-                              <TableFieldSelector
-                                tables={listOfDBTables}
-                                selectedConnectionId={selectedConnectionId}
-                                onGenerateQuery={handleGenerateQueryFromTables}
-                              />
+                            <div className="flex justify-between items-center mb-4">
+                              <p className="text-center text-muted-foreground dark:text-muted-foreground">
+                                Select tables to generate a query, or start typing your own query below.
+                              </p>
+                              <div className="flex rounded-lg border border-border bg-background p-1">
+                                <Button
+                                  variant={chatPanelMode === 'tagcloud' ? 'default' : 'ghost'}
+                                  size="sm"
+                                  onClick={() => setChatPanelMode('tagcloud')}
+                                  className="text-xs px-3 py-1"
+                                >
+                                  Quick Select
+                                </Button>
+                                <Button
+                                  variant={chatPanelMode === 'fieldselector' ? 'default' : 'ghost'}
+                                  size="sm"
+                                  onClick={() => setChatPanelMode('fieldselector')}
+                                  className="text-xs px-3 py-1"
+                                >
+                                  Field Selector
+                                </Button>
+                              </div>
+                            </div>
+                            <div className="h-[calc(100%-4rem)]">
+                              {chatPanelMode === 'tagcloud' ? (
+                                <div className="h-full flex flex-col">
+                                  <div className="flex justify-between items-center mb-3">
+                                    <h3 className="text-sm font-semibold text-foreground">Database Tables</h3>
+                                    <div className="flex gap-2">
+                                      <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={handleClearTagCloudSelection}
+                                        disabled={selectedTablesFromTagCloud.length === 0}
+                                        className="text-xs"
+                                      >
+                                        Clear
+                                      </Button>
+                                      <Button
+                                        size="sm"
+                                        onClick={handleTagCloudGenerateQuery}
+                                        disabled={selectedTablesFromTagCloud.length === 0}
+                                        className="bg-primary hover:bg-primary/80 text-primary-foreground text-xs"
+                                      >
+                                        Generate Query
+                                      </Button>
+                                    </div>
+                                  </div>
+                                  {selectedTablesFromTagCloud.length > 0 && (
+                                    <div className="mb-3 p-2 bg-secondary/50 rounded-md">
+                                      <p className="text-xs text-muted-foreground mb-1">Selected tables:</p>
+                                      <div className="flex flex-wrap gap-1">
+                                        {selectedTablesFromTagCloud.map(tableName => (
+                                          <span key={tableName} className="text-xs bg-primary text-primary-foreground px-2 py-1 rounded">
+                                            {tableName}
+                                          </span>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                  <div className="flex-1 overflow-hidden">
+                                    <TagCloud
+                                      tags={listOfDBTables}
+                                      onTagClick={handleTagCloudTableClick}
+                                      selectedTags={selectedTablesFromTagCloud}
+                                      className="h-full"
+                                    />
+                                  </div>
+                                </div>
+                              ) : (
+                                <TableFieldSelector
+                                  tables={listOfDBTables}
+                                  selectedConnectionId={selectedConnectionId}
+                                  onGenerateQuery={handleGenerateQueryFromTables}
+                                />
+                              )}
                             </div>
                           </div>
                       )}

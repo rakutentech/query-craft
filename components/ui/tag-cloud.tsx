@@ -5,10 +5,12 @@ import { cn } from "@/lib/utils"
 export interface TablesProps
     extends React.HTMLAttributes<HTMLUListElement> {
     tags: string[]
+    onTagClick?: (tag: string) => void
+    selectedTags?: string[]
 }
 
 const TagCloud = React.forwardRef<HTMLUListElement, TablesProps>(
-    ({ className, tags, ...props }, ref) => {
+    ({ className, tags, onTagClick, selectedTags = [], ...props }, ref) => {
         return (
             <ul
                 ref={ref}
@@ -22,17 +24,27 @@ const TagCloud = React.forwardRef<HTMLUListElement, TablesProps>(
             >
                 {tags.length === 0 && (
                     <li className="flex items-center justify-center w-full p-2 text-muted-foreground">
-                        <span className="text-sm font-medium">No items found</span>
+                        <span className="text-sm font-medium">No tables found</span>
                     </li>
                 )}
-                {tags.map((tag, index) => (
-                    <li
-                        key={index}
-                        className="flex items-center justify-between p-2 border rounded-md bg-secondary text-secondary-foreground"
-                    >
-                        <span className="text-sm font-medium">{tag}</span>
-                    </li>
-                ))}
+                {tags.map((tag, index) => {
+                    const isSelected = selectedTags.includes(tag);
+                    return (
+                        <li
+                            key={index}
+                            className={cn(
+                                "flex items-center justify-between p-2 border rounded-md cursor-pointer transition-colors",
+                                "hover:bg-primary/10 hover:border-primary/20",
+                                isSelected
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "bg-secondary text-secondary-foreground"
+                            )}
+                            onClick={() => onTagClick?.(tag)}
+                        >
+                            <span className="text-sm font-medium">{tag}</span>
+                        </li>
+                    );
+                })}
             </ul>
         )
     }
