@@ -329,13 +329,16 @@ async function createAIStream({
   updateConversationTitle: (id: number, title: string) => Promise<void>;
 }) {
   let accumulated = "";
-  let messageCreated = false;
 
   return new ReadableStream({
     async start(controller) {
+      // Create the message in database BEFORE streaming starts
+      await addMessage(currentConversationId, "", "system", systemMessageId);
+      
       controller.enqueue(encoder.encode(`event:meta\ndata:${JSON.stringify({
         conversationId: currentConversationId,
-        conversationHistory: await getConversationMessages(currentConversationId)
+        conversationHistory: await getConversationMessages(currentConversationId),
+        systemMessageId: systemMessageId
       })}\n\n`));
 
       const reader = aiStream.getReader();
@@ -351,24 +354,12 @@ async function createAIStream({
           const chunk = typeof value === "string" ? value : new TextDecoder().decode(value);
           accumulated += chunk;
           
-          // Create the message in database as soon as we have some content
-          if (!messageCreated && accumulated.trim().length > 0) {
-            await addMessage(currentConversationId, accumulated, "system", systemMessageId);
-            messageCreated = true;
-          }
-          
           controller.enqueue(typeof value === "string" ? encoder.encode(value) : value);
         }
       } finally {
         controller.close();
-        // Update the message with final content if it was created, otherwise create it
-        if (messageCreated) {
-          // Update the existing message with final content
-          await updateMessageById(systemMessageId, accumulated);
-        } else {
-          // Create the message if no content was streamed
-          await addMessage(currentConversationId, accumulated, "system", systemMessageId);
-        }
+        // Update the message with final content
+        await updateMessageById(systemMessageId, accumulated);
         
         if (!conversationId) {
           await updateConversationTitle(currentConversationId, query.substring(0, 50) + "...");

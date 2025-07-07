@@ -511,7 +511,7 @@ export default function DatabaseQueryApp() {
 
     setIsLoading(true);
     let metaReceived = false;
-    let meta: { conversationId: number; conversationHistory: any } | null = null;
+    let meta: { conversationId: number; conversationHistory: any; systemMessageId?: string } | null = null;
     let aiContent = "";
     setIsStreaming(true);
     setStopStreaming(false);
@@ -536,7 +536,7 @@ export default function DatabaseQueryApp() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
-      let systemMessageId = uuidv4();
+      let systemMessageId = uuidv4(); // fallback, will be replaced by meta
 
       while (!done) {
         const { value, done: readerDone } = await reader.read();
@@ -553,6 +553,11 @@ export default function DatabaseQueryApp() {
               meta = JSON.parse(dataLine.replace('data:', ''));
               metaReceived = true;
 
+              // Use the actual database message ID from backend
+              if (meta?.systemMessageId) {
+                systemMessageId = meta.systemMessageId;
+              }
+
               setConversationId(meta?.conversationId || null);
               const newMessages = (meta && Array.isArray(meta.conversationHistory))
                   ? meta.conversationHistory.map((msg: Message) => {
@@ -567,9 +572,13 @@ export default function DatabaseQueryApp() {
                   })
                   : [];
 
+              // Check if the system message already exists in conversation history (it will now, since backend creates it)
+              const messageExists = newMessages.some(msg => msg.id === systemMessageId);
+              
               setMessages((prev) => [
                 ...newMessages,
-                { id: systemMessageId, content: "", sender: "system", timestamp: new Date().toISOString() }
+                // Only add empty message if it doesn't already exist in conversation history
+                ...(messageExists ? [] : [{ id: systemMessageId, content: "", sender: "system" as const, timestamp: new Date().toISOString() }])
               ]);
 
               if (!conversationId && meta?.conversationId) {
