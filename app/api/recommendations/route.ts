@@ -3,6 +3,9 @@ import { getUserMessageRecommendations } from '@/app/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/lib/auth';
 
+// Force dynamic rendering since we use session and request data
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);

@@ -18,7 +18,7 @@ import {
   SelectValue
 } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { PlusCircle, Trash2, Asterisk, RotateCcw } from "lucide-react";
+import { PlusCircle, Trash2, Asterisk, RotateCcw, Check, X } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -127,7 +127,20 @@ export default function SettingsPage() {
   const [connectionsWithoutSchema, setConnectionsWithoutSchema] = useState<number[]>([]);
   const [testingConnection, setTestingConnection] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
+  const [resetting, setResetting] = useState(false);
   const [showResetDialog, setShowResetDialog] = useState(false);
+  const [testingAll, setTestingAll] = useState(false);
+  const [testAllProgress, setTestAllProgress] = useState<{
+    total: number;
+    tested: number;
+    current: number;
+    results: { [key: number]: boolean };
+  }>({
+    total: 0,
+    tested: 0,
+    current: -1,
+    results: {}
+  });
 
   useEffect(() => {
     // Try to load cached settings first for instant display
@@ -212,10 +225,13 @@ export default function SettingsPage() {
 
   const fetchSettings = async () => {
     setLoading(true);
+    setError(null); // Clear any previous error
     try {
-      const response = await fetch(`${BASE_PATH}/api/settings`);
+      // Construct the API URL properly, handling undefined BASE_PATH
+      const apiUrl = BASE_PATH ? `${BASE_PATH}/api/settings` : '/api/settings';
+      const response = await fetch(apiUrl);
       if (!response.ok) {
-        throw new Error("Failed to fetch settings");
+        throw new Error(`Failed to fetch settings: ${response.status} ${response.statusText}`);
       }
       let data = await response.json();
       if (data && data.databaseConnections.length > 0) {
@@ -226,6 +242,7 @@ export default function SettingsPage() {
         };
         setSettings(newSettings);
         localStorage.setItem('settingsCache', JSON.stringify(newSettings));
+        setError(null); // Clear error on success
       } else {
         const defaultSettings = await fetchDefaultSettings();
         if (defaultSettings) {
@@ -235,6 +252,7 @@ export default function SettingsPage() {
           };
           setSettings(newSettings);
           localStorage.setItem('settingsCache', JSON.stringify(newSettings));
+          setError(null); // Clear error on success
         }
       }
     } catch (error) {
@@ -303,7 +321,8 @@ export default function SettingsPage() {
     setTestingConnection(index); // Show loading
     const connection = settings.databaseConnections[index];
     try {
-      const response = await fetch(`${BASE_PATH}/api/connections`, {
+      const apiUrl = BASE_PATH ? `${BASE_PATH}/api/connections` : '/api/connections';
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -382,7 +401,8 @@ export default function SettingsPage() {
       });
 
       // Save all settings
-      const response = await fetch(`${BASE_PATH}/api/settings`, {
+      const apiUrl = BASE_PATH ? `${BASE_PATH}/api/settings` : '/api/settings';
+      const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
@@ -411,7 +431,8 @@ export default function SettingsPage() {
       return removeDatabaseConnection(connectionToDelete);
     }
     try {
-      const response = await fetch(`${BASE_PATH}/api/connections/${connectionId}`, {
+      const apiUrl = BASE_PATH ? `${BASE_PATH}/api/connections/${connectionId}` : `/api/connections/${connectionId}`;
+      const response = await fetch(apiUrl, {
         method: "DELETE"
       });
 
@@ -435,6 +456,7 @@ export default function SettingsPage() {
   };
 
   const handleResetSettings = async () => {
+    setResetting(true);
     try {
       const defaultSettings = await fetchDefaultSettings();
       if (defaultSettings) {
@@ -452,7 +474,104 @@ export default function SettingsPage() {
     } catch (error) {
       console.error("Error resetting settings:", error);
       setError("Failed to reset settings. Please try again.");
+    } finally {
+      setResetting(false);
     }
+  };
+
+  const handleTestAndSaveAll = async () => {
+    if (!validateForm()) {
+      setError("Please fill in all required fields before testing connections");
+      return;
+    }
+
+    setTestingAll(true);
+    setError(null);
+    
+    const totalConnections = settings.databaseConnections.length;
+    setTestAllProgress({
+      total: totalConnections,
+      tested: 0,
+      current: -1,
+      results: {}
+    });
+
+    let allTestsPassed = true;
+    const newTestResults: { [key: string]: string } = {};
+
+    // Test each connection sequentially
+    for (let i = 0; i < settings.databaseConnections.length; i++) {
+      setTestAllProgress(prev => ({
+        ...prev,
+        current: i
+      }));
+
+      const connection = settings.databaseConnections[i];
+      try {
+        const apiUrl = BASE_PATH ? `${BASE_PATH}/api/connections` : '/api/connections';
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(connection)
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+          newTestResults[i] = "Connection successful and schema saved";
+          setTestAllProgress(prev => ({
+            ...prev,
+            tested: prev.tested + 1,
+            results: { ...prev.results, [i]: true }
+          }));
+          
+          // Update the connection with schema
+          setSettings((prev) => {
+            const newConnections = [...prev.databaseConnections];
+            newConnections[i] = {
+              ...newConnections[i],
+              schema: result.schema
+            };
+            return { ...prev, databaseConnections: newConnections };
+          });
+        } else {
+          allTestsPassed = false;
+          newTestResults[i] = result.message || "Connection test failed";
+          setTestAllProgress(prev => ({
+            ...prev,
+            tested: prev.tested + 1,
+            results: { ...prev.results, [i]: false }
+          }));
+        }
+      } catch (error) {
+        allTestsPassed = false;
+        newTestResults[i] = (error as any).message || "Connection test failed";
+        setTestAllProgress(prev => ({
+          ...prev,
+          tested: prev.tested + 1,
+          results: { ...prev.results, [i]: false }
+        }));
+      }
+    }
+
+    setTestConnectionResult(newTestResults);
+
+    if (allTestsPassed) {
+      // All tests passed, proceed to save
+      await saveSettings();
+    } else {
+      setError("Some connections failed to test. Please check the connection details and try again.");
+    }
+
+    setTestingAll(false);
+    setTestAllProgress({
+      total: 0,
+      tested: 0,
+      current: -1,
+      results: {}
+    });
   };
 
   if (loading) {
@@ -526,9 +645,17 @@ export default function SettingsPage() {
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleResetSettings}
+              disabled={resetting}
               className="bg-red-600 hover:bg-red-700"
             >
-              Reset Settings
+              {resetting ? (
+                <>
+                  <Spinner className="mr-2 h-4 w-4" />
+                  Resetting...
+                </>
+              ) : (
+                "Reset Settings"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -746,15 +873,43 @@ export default function SettingsPage() {
                       {testConnectionResult[index]}
                     </p>
                   )}
-                  <div className="">
+                  <div className="flex justify-between items-center">
+                    {testingAll && (
+                      <div className="flex items-center text-xs">
+                        {testAllProgress.current === index ? (
+                          <div className="flex items-center text-blue-600">
+                            <Spinner className="mr-1 h-3 w-3" />
+                            <span>Testing...</span>
+                          </div>
+                        ) : testAllProgress.results[index] === true ? (
+                          <div className="flex items-center text-green-600">
+                            <Check className="mr-1 h-3 w-3" />
+                            <span>Passed</span>
+                          </div>
+                        ) : testAllProgress.results[index] === false ? (
+                          <div className="flex items-center text-red-600">
+                            <X className="mr-1 h-3 w-3" />
+                            <span>Failed</span>
+                          </div>
+                        ) : testAllProgress.current > index ? (
+                          <div className="flex items-center text-gray-500">
+                            <span>Completed</span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center text-gray-400">
+                            <span>Waiting</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <Button
                       onClick={() => testAndSaveConnection(index)}
-                      className="float-right text-sm font-medium text-gray-900 focus:outline-none bg-white rounded-full border border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-4 focus:ring-gray-100"
-                      disabled={testingConnection === index}
+                      className="text-sm font-medium text-gray-900 focus:outline-none bg-white rounded-full border border-gray-200 hover:bg-gray-100 hover:text-blue-700 focus:z-10 focus:ring-4 focus:ring-gray-100"
+                      disabled={testingConnection === index || testingAll}
                     >
                       {testingConnection === index ? (
                         <>
-                          <Spinner className="mr-2" /> 
+                          <Spinner className="mr-2" />
                         </>
                       ) : (
                         "Test"
@@ -779,14 +934,29 @@ export default function SettingsPage() {
           <Button
             variant="outline"
             onClick={() => setShowResetDialog(true)}
+            disabled={resetting || loading}
             className="text-red-600 border-red-600 hover:bg-red-50 hover:text-red-700"
           >
             <RotateCcw className="mr-2 h-4 w-4" />
             Reset Settings
           </Button>
           <div className="flex space-x-4">
-            <Button variant="outline" onClick={() => router.push("/")}>Cancel</Button>
-            <Button onClick={handleSave} disabled={isSaving} className="bg-green-600 hover:bg-green-700">
+            <Button variant="outline" onClick={() => router.push("/")} disabled={loading || resetting || testingAll}>Cancel</Button>
+            <Button
+              onClick={handleTestAndSaveAll}
+              disabled={isSaving || loading || resetting || testingAll || settings.databaseConnections.length === 0}
+              className="bg-blue-600 hover:bg-blue-700"
+            >
+              {testingAll ? (
+                <>
+                  <Spinner className="mr-2" />
+                  Testing {testAllProgress.tested}/{testAllProgress.total}...
+                </>
+              ) : (
+                "Test and Save All"
+              )}
+            </Button>
+            <Button onClick={handleSave} disabled={isSaving || loading || resetting || testingAll} className="bg-green-600 hover:bg-green-700">
               {isSaving ? <Spinner /> : "Save Settings"}
             </Button>
           </div>
