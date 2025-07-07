@@ -1521,7 +1521,6 @@ export async function updateSharedMessage(token: string, content: string): Promi
 export async function saveDatabaseConnection(connection: DatabaseConnection, userId: string): Promise<number> {
   const db = await getDb();
   const now = databaseConfig.type === 'mysql'
-  const now = databaseConfig.type === 'mysql'
     ? new Date().toISOString().slice(0, 19).replace('T', ' ')
     : new Date().toISOString();
 
