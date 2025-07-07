@@ -530,6 +530,35 @@ export async function deleteDatabaseConnection(id: number, userId: string): Prom
   }
 }
 
+export async function deleteAllDatabaseConnections(userId: string): Promise<void> {
+  logDbOperation('Deleting all database connections for user', { userId });
+  const db = await getDb();
+  try {
+    if (databaseConfig.type === 'mysql') {
+      const [result] = await (db as mysql.Pool).execute(
+        'DELETE FROM database_connections WHERE user_id = ?',
+        [userId]
+      );
+      logDbOperation('All database connections deleted (MySQL)', {
+        userId,
+        deletedCount: (result as any).affectedRows
+      });
+    } else {
+      const result = await (db as SQLiteDatabase).run(
+        'DELETE FROM database_connections WHERE user_id = ?',
+        [userId]
+      );
+      logDbOperation('All database connections deleted (SQLite)', {
+        userId,
+        deletedCount: result.changes
+      });
+    }
+  } catch (error) {
+    logDbError('Failed to delete all database connections', error);
+    throw new Error(`Failed to delete all database connections: ${(error as Error).message}`);
+  }
+}
+
 export async function testDatabaseConnection(connection: DatabaseConnection): Promise<boolean> {
   const connectionKey = `${connection.dbHost}:${connection.dbPort}:${connection.dbUsername}:${connection.dbName}`;
   
@@ -1495,33 +1524,13 @@ export async function saveDatabaseConnection(connection: DatabaseConnection, use
     ? new Date().toISOString().slice(0, 19).replace('T', ' ')
     : new Date().toISOString();
 
-  // Check if connection already exists based on host + database name identifier
-  let existingConnection: DatabaseConnection | null = null;
-  
-  if (databaseConfig.type === 'mysql') {
-    const [rows] = await (db as mysql.Pool).execute(
-      'SELECT * FROM database_connections WHERE user_id = ? AND dbHost = ? AND dbName = ? LIMIT 1',
-      [userId, connection.dbHost, connection.dbName]
-    );
-    const arr = rows as any[];
-    if (arr && arr.length > 0) {
-      existingConnection = arr[0] as DatabaseConnection;
-    }
+  // Only update if we have an explicit ID, otherwise always create new connection
+  if (connection.id) {
+    // Update existing connection
+    await updateDatabaseConnection(connection, userId);
+    return connection.id;
   } else {
-    const result = await (db as SQLiteDatabase).get<DatabaseConnection>(
-      'SELECT * FROM database_connections WHERE user_id = ? AND dbHost = ? AND dbName = ? LIMIT 1',
-      [userId, connection.dbHost, connection.dbName]
-    );
-    existingConnection = result || null;
-  }
-
-  if (existingConnection) {
-    // Connection exists based on host + database name, update it
-    const connectionToUpdate = { ...connection, id: existingConnection.id };
-    await updateDatabaseConnection(connectionToUpdate, userId);
-    return existingConnection.id;
-  } else {
-    // New connection, insert it
+    // Create new connection - convert undefined to null for MySQL
     const params = [
       userId,
       connection.projectName,
@@ -1532,7 +1541,7 @@ export async function saveDatabaseConnection(connection: DatabaseConnection, use
       connection.dbPassword,
       connection.dbName,
       connection.schema,
-      connection.tag,
+      connection.tag || null, // Convert undefined to null for MySQL
       now,
       now
     ] as const;
@@ -1555,7 +1564,7 @@ export async function saveDatabaseConnection(connection: DatabaseConnection, use
 
 export async function updateDatabaseConnection(connection: DatabaseConnection, userId: string): Promise<void> {
   const db = await getDb();
-  const now = databaseConfig.type === 'mysql' 
+  const now = databaseConfig.type === 'mysql'
     ? new Date().toISOString().slice(0, 19).replace('T', ' ')
     : new Date().toISOString();
 
@@ -1571,7 +1580,7 @@ export async function updateDatabaseConnection(connection: DatabaseConnection, u
         connection.dbPassword,
         connection.dbName,
         connection.schema,
-        connection.tag,
+        connection.tag || null, // Convert undefined to null for MySQL
         now,
         connection.id,
         userId
@@ -1589,7 +1598,7 @@ export async function updateDatabaseConnection(connection: DatabaseConnection, u
         connection.dbPassword,
         connection.dbName,
         connection.schema,
-        connection.tag,
+        connection.tag || null, // Convert undefined to null for SQLite
         now,
         connection.id,
         userId

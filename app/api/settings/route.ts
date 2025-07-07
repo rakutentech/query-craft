@@ -1,6 +1,6 @@
 // app/api/settings/route.ts
 import { NextRequest, NextResponse } from 'next/server';
-import { getSettings, saveSettings, getDatabaseConnections, saveDatabaseConnection, deleteDatabaseConnection, testDatabaseConnection, DatabaseConnection } from '@/app/lib/db';
+import { getSettings, saveSettings, getDatabaseConnections, saveDatabaseConnection, deleteDatabaseConnection, deleteAllDatabaseConnections, testDatabaseConnection, DatabaseConnection } from '@/app/lib/db';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/app/lib/auth';
 

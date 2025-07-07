@@ -134,12 +134,10 @@ export default function SettingsPage() {
   const [testAllProgress, setTestAllProgress] = useState<{
     total: number;
     tested: number;
-    current: number;
     results: { [key: number]: boolean };
   }>({
     total: 0,
     tested: 0,
-    current: -1,
     results: {}
   });
 
@@ -240,6 +238,7 @@ export default function SettingsPage() {
         throw new Error(`Failed to fetch settings: ${response.status} ${response.statusText}`);
       }
       let data = await response.json();
+      
       if (data && data.databaseConnections.length > 0) {
         data.settings.systemPrompt =  data.settings.systemPrompt? data.settings.systemPrompt : DEFAULT_SYSTEM_PROMPT;
         const newSettings = {
@@ -247,6 +246,7 @@ export default function SettingsPage() {
           databaseConnections: data.databaseConnections
         };
         setSettings(newSettings);
+        
         // Cache settings with full data including schemas using IndexedDB
         try {
           await cacheStorage.setItem('settingsCache', newSettings, 30); // 30 minute TTL
@@ -336,6 +336,7 @@ export default function SettingsPage() {
     }
     setTestingConnection(index); // Show loading
     const connection = settings.databaseConnections[index];
+    
     try {
       const apiUrl = BASE_PATH ? `${BASE_PATH}/api/connections` : '/api/connections';
       const response = await fetch(apiUrl, {
@@ -346,21 +347,28 @@ export default function SettingsPage() {
         body: JSON.stringify(connection)
       });
       const result = await response.json();
+      
       if (response.ok) {
-        setTestConnectionResult((prev) => ({
-          ...prev,
-          [index]: "Connection successful and schema saved"
-        }));
-        await new Promise(resolve => {
-          setSettings((prev) => {
-            const newConnections = [...prev.databaseConnections];
-            newConnections[index] = {
-              ...newConnections[index],
-              schema: result.schema
-            };
-            resolve(undefined);
-            return { ...prev, databaseConnections: newConnections };
-          });
+        if (!result.schema || result.schema.trim() === '') {
+          setTestConnectionResult((prev) => ({
+            ...prev,
+            [index]: "Connection successful but schema is empty"
+          }));
+        } else {
+          setTestConnectionResult((prev) => ({
+            ...prev,
+            [index]: "Connection successful and schema saved"
+          }));
+        }
+        
+        // Update the connection with schema
+        setSettings((prev) => {
+          const newConnections = [...prev.databaseConnections];
+          newConnections[index] = {
+            ...newConnections[index],
+            schema: result.schema || ''
+          };
+          return { ...prev, databaseConnections: newConnections };
         });
         return true;
       } else {
@@ -403,9 +411,13 @@ export default function SettingsPage() {
     await saveSettings();
   };
 
-  const saveSettings = async () => {
+  const saveSettings = async (settingsToSave?: Settings) => {
     setIsSaving(true);
     setError(null);
+    
+    // Use provided settings or current state
+    const finalSettings = settingsToSave || settings;
+    
     try {
       // Save configuration to cookies
       const encodedConfig = encodeURIComponent(JSON.stringify(providerConfig));
@@ -418,17 +430,22 @@ export default function SettingsPage() {
 
       // Save all settings
       const apiUrl = BASE_PATH ? `${BASE_PATH}/api/settings` : '/api/settings';
+      
       const response = await fetch(apiUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
         },
-        body: JSON.stringify(settings)
+        body: JSON.stringify(finalSettings)
       });
 
       if (!response.ok) {
-        throw new Error("Failed to save settings");
+        const errorText = await response.text();
+        console.error(`❌ Save failed: ${response.status} ${response.statusText}`, errorText);
+        throw new Error(`Failed to save settings: ${response.status} ${response.statusText}`);
       }
+      
+      await response.json();
       router.push("/");
     } catch (error) {
       console.error("Error saving settings:", error);
@@ -474,25 +491,49 @@ export default function SettingsPage() {
   const handleResetSettings = async () => {
     setResetting(true);
     try {
-      const defaultSettings = await fetchDefaultSettings();
-      if (defaultSettings) {
-        const newSettings = {
-          aiSettings: { id: 1, systemPrompt: DEFAULT_SYSTEM_PROMPT },
-          databaseConnections: defaultSettings.databaseConnections
-        };
-        setSettings(newSettings);
-        setTestConnectionResult({});
-        setError(null);
-        setFormErrors({});
-        
-        // Cache reset settings with full data using IndexedDB
-        try {
-          await cacheStorage.setItem('settingsCache', newSettings, 30); // 30 minute TTL
-        } catch (error) {
-          console.warn('Failed to cache reset settings:', error);
+      // First, delete all existing database connections
+      const apiUrl = BASE_PATH ? `${BASE_PATH}/api/settings/reset` : '/api/settings/reset';
+      const resetResponse = await fetch(apiUrl, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json'
         }
-        setShowResetDialog(false);
+      });
+      
+      if (!resetResponse.ok) {
+        throw new Error(`Failed to reset database connections: ${resetResponse.status}`);
       }
+      
+      // Load fresh settings with empty database connections (clean slate)
+      const newSettings = {
+        aiSettings: { id: 1, systemPrompt: DEFAULT_SYSTEM_PROMPT },
+        databaseConnections: [
+          {
+            projectName: "",
+            dbDriver: "",
+            dbHost: "",
+            dbPort: "",
+            dbUsername: "",
+            dbPassword: "",
+            dbName: "",
+            schema: "",
+            tag: ""
+          }
+        ]
+      };
+      setSettings(newSettings);
+      setTestConnectionResult({});
+      setError(null);
+      setFormErrors({});
+      
+      // Cache reset settings with IndexedDB
+      try {
+        await cacheStorage.setItem('settingsCache', newSettings, 30); // 30 minute TTL
+      } catch (error) {
+        console.warn('Failed to cache reset settings:', error);
+      }
+      
+      setShowResetDialog(false);
     } catch (error) {
       console.error("Error resetting settings:", error);
       setError("Failed to reset settings. Please try again.");
@@ -514,21 +555,18 @@ export default function SettingsPage() {
     setTestAllProgress({
       total: totalConnections,
       tested: 0,
-      current: -1,
       results: {}
     });
 
     let allTestsPassed = true;
     const newTestResults: { [key: string]: string } = {};
 
-    // Test each connection sequentially
-    for (let i = 0; i < settings.databaseConnections.length; i++) {
-      setTestAllProgress(prev => ({
-        ...prev,
-        current: i
-      }));
-
-      const connection = settings.databaseConnections[i];
+    const testResults: Array<{index: number, success: boolean, schema?: string, error?: string}> = [];
+    
+    // Test each connection one by one (sequential, not parallel)
+    for (let index = 0; index < settings.databaseConnections.length; index++) {
+      const connection = settings.databaseConnections[index];
+      
       try {
         const apiUrl = BASE_PATH ? `${BASE_PATH}/api/connections` : '/api/connections';
         const response = await fetch(apiUrl, {
@@ -542,58 +580,99 @@ export default function SettingsPage() {
         const result = await response.json();
         
         if (response.ok) {
-          newTestResults[i] = "Connection successful and schema saved";
-          setTestAllProgress(prev => ({
-            ...prev,
-            tested: prev.tested + 1,
-            results: { ...prev.results, [i]: true }
-          }));
+          const schemaToSave = result.schema || '';
           
-          // Update the connection with schema
+          if (!result.schema || result.schema.trim() === '') {
+            newTestResults[index] = "Connection successful but schema is empty";
+            testResults.push({ index, success: true, schema: '' });
+          } else {
+            newTestResults[index] = "Connection successful and schema saved";
+            testResults.push({ index, success: true, schema: result.schema });
+          }
+          
+          // ALWAYS update state after successful connection test, even if schema is empty
           setSettings((prev) => {
             const newConnections = [...prev.databaseConnections];
-            newConnections[i] = {
-              ...newConnections[i],
-              schema: result.schema
+            newConnections[index] = {
+              ...newConnections[index],
+              schema: schemaToSave
             };
             return { ...prev, databaseConnections: newConnections };
           });
-        } else {
-          allTestsPassed = false;
-          newTestResults[i] = result.message || "Connection test failed";
+          
           setTestAllProgress(prev => ({
             ...prev,
             tested: prev.tested + 1,
-            results: { ...prev.results, [i]: false }
+            results: { ...prev.results, [index]: true }
+          }));
+        } else {
+          allTestsPassed = false;
+          newTestResults[index] = result.message || "Connection test failed";
+          testResults.push({ index, success: false, error: result.message });
+          setTestAllProgress(prev => ({
+            ...prev,
+            tested: prev.tested + 1,
+            results: { ...prev.results, [index]: false }
           }));
         }
       } catch (error) {
         allTestsPassed = false;
-        newTestResults[i] = (error as any).message || "Connection test failed";
+        newTestResults[index] = (error as any).message || "Connection test failed";
+        testResults.push({ index, success: false, error: (error as any).message });
         setTestAllProgress(prev => ({
           ...prev,
           tested: prev.tested + 1,
-          results: { ...prev.results, [i]: false }
+          results: { ...prev.results, [index]: false }
         }));
       }
     }
-
+    
     setTestConnectionResult(newTestResults);
 
+    // Check if all tests passed
+    allTestsPassed = testResults.every(result => result.success);
+
     if (allTestsPassed) {
-      // All tests passed, proceed to save
-      await saveSettings();
+      const successfulResults = testResults.filter(result => result.success);
+      
+      try {
+        // Build the final settings object with all schemas from test results
+        const finalConnections = settings.databaseConnections.map((conn, index) => {
+          const testResult = testResults.find(r => r.index === index);
+          if (testResult && testResult.success) {
+            return {
+              ...conn,
+              schema: testResult.schema || ''
+            };
+          }
+          return conn;
+        });
+        
+        const finalSettings = {
+          ...settings,
+          databaseConnections: finalConnections
+        };
+        
+        await saveSettings(finalSettings);
+      } catch (error) {
+        setError(`Failed to save settings with schemas: ${(error as any).message}`);
+      } finally {
+        setTestingAll(false);
+        setTestAllProgress({
+          total: 0,
+          tested: 0,
+          results: {}
+        });
+      }
     } else {
       setError("Some connections failed to test. Please check the connection details and try again.");
+      setTestingAll(false);
+      setTestAllProgress({
+        total: 0,
+        tested: 0,
+        results: {}
+      });
     }
-
-    setTestingAll(false);
-    setTestAllProgress({
-      total: 0,
-      tested: 0,
-      current: -1,
-      results: {}
-    });
   };
 
   if (loading) {
@@ -647,7 +726,7 @@ export default function SettingsPage() {
             <AlertDialogCancel onClick={() => setShowSchemaConfirmDialog(false)}>
               Cancel
             </AlertDialogCancel>
-            <AlertDialogAction onClick={saveSettings}>
+            <AlertDialogAction onClick={() => saveSettings()}>
               Save Anyway
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -898,12 +977,7 @@ export default function SettingsPage() {
                   <div className="flex justify-between items-center">
                     {testingAll && (
                       <div className="flex items-center text-xs">
-                        {testAllProgress.current === index ? (
-                          <div className="flex items-center text-blue-600">
-                            <Spinner className="mr-1 h-3 w-3" />
-                            <span>Testing...</span>
-                          </div>
-                        ) : testAllProgress.results[index] === true ? (
+                        {testAllProgress.results[index] === true ? (
                           <div className="flex items-center text-green-600">
                             <Check className="mr-1 h-3 w-3" />
                             <span>Passed</span>
@@ -913,13 +987,10 @@ export default function SettingsPage() {
                             <X className="mr-1 h-3 w-3" />
                             <span>Failed</span>
                           </div>
-                        ) : testAllProgress.current > index ? (
-                          <div className="flex items-center text-gray-500">
-                            <span>Completed</span>
-                          </div>
                         ) : (
-                          <div className="flex items-center text-gray-400">
-                            <span>Waiting</span>
+                          <div className="flex items-center text-blue-600">
+                            <Spinner className="mr-1 h-3 w-3" />
+                            <span>Testing...</span>
                           </div>
                         )}
                       </div>
