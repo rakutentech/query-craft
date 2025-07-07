@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { cacheStorage } from "@/lib/indexeddb";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -144,15 +145,20 @@ export default function SettingsPage() {
 
   useEffect(() => {
     // Try to load cached settings first for instant display
-    const cached = localStorage.getItem('settingsCache');
-    if (cached) {
+    const loadCachedSettings = async () => {
       try {
-        const parsed = JSON.parse(cached);
-        setSettings(parsed);
-        setLoading(false);
-      } catch {}
-    }
-    fetchSettings();
+        const cached = await cacheStorage.getItem('settingsCache', 30); // 30 minute TTL
+        if (cached) {
+          setSettings(cached);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.warn('Failed to load cached settings:', error);
+      }
+      fetchSettings();
+    };
+    
+    loadCachedSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -241,7 +247,12 @@ export default function SettingsPage() {
           databaseConnections: data.databaseConnections
         };
         setSettings(newSettings);
-        localStorage.setItem('settingsCache', JSON.stringify(newSettings));
+        // Cache settings with full data including schemas using IndexedDB
+        try {
+          await cacheStorage.setItem('settingsCache', newSettings, 30); // 30 minute TTL
+        } catch (error) {
+          console.warn('Failed to cache settings:', error);
+        }
         setError(null); // Clear error on success
       } else {
         const defaultSettings = await fetchDefaultSettings();
@@ -251,7 +262,12 @@ export default function SettingsPage() {
             databaseConnections: defaultSettings.databaseConnections
           };
           setSettings(newSettings);
-          localStorage.setItem('settingsCache', JSON.stringify(newSettings));
+          // Cache default settings with IndexedDB
+          try {
+            await cacheStorage.setItem('settingsCache', newSettings, 30); // 30 minute TTL
+          } catch (error) {
+            console.warn('Failed to cache default settings:', error);
+          }
           setError(null); // Clear error on success
         }
       }
@@ -468,7 +484,13 @@ export default function SettingsPage() {
         setTestConnectionResult({});
         setError(null);
         setFormErrors({});
-        localStorage.setItem('settingsCache', JSON.stringify(newSettings));
+        
+        // Cache reset settings with full data using IndexedDB
+        try {
+          await cacheStorage.setItem('settingsCache', newSettings, 30); // 30 minute TTL
+        } catch (error) {
+          console.warn('Failed to cache reset settings:', error);
+        }
         setShowResetDialog(false);
       }
     } catch (error) {
