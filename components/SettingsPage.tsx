@@ -247,7 +247,6 @@ export default function SettingsPage() {
           databaseConnections: data.databaseConnections
         };
         setSettings(newSettings);
-        
         // Cache settings with full data including schemas using IndexedDB
         try {
           await cacheStorage.setItem('settingsCache', newSettings, 30); // 30 minute TTL
@@ -263,7 +262,6 @@ export default function SettingsPage() {
             databaseConnections: defaultSettings.databaseConnections
           };
           setSettings(newSettings);
-          
           // Cache default settings with IndexedDB
           try {
             await cacheStorage.setItem('settingsCache', newSettings, 30); // 30 minute TTL

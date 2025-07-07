@@ -174,6 +174,7 @@ export default function DatabaseQueryApp() {
   const [recommendations, setRecommendations] = useState<string[]>([]);
   const [showRecommendations, setShowRecommendations] = useState(false);
   const recommendationsRef = useRef<HTMLDivElement>(null);
+  const leftPanelClosedForStreamingRef = useRef(false);
 
   // Chat panel selector state - defaults to TagCloud, with IndexedDB persistence
   const [chatPanelMode, setChatPanelMode] = useState<'tagcloud' | 'fieldselector'>('tagcloud');
@@ -1706,7 +1707,6 @@ export default function DatabaseQueryApp() {
   // Recommendation dropdown keyboard navigation and accessibility
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const [dropdownActive, setDropdownActive] = useState(false); // Track if user is navigating dropdown
-  const leftPanelClosedForStreamingRef = useRef(false);
 
   // Keyboard navigation for recommendations
   useEffect(() => {
@@ -1761,9 +1761,9 @@ export default function DatabaseQueryApp() {
       <div className="container mx-auto py-2 px-2">
         <div className="flex justify-between items-center pb-2">
           <div className="flex items-center">
-            <Button 
-              variant="ghost" 
-              size="sm" 
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={toggleLeftPanel}
               className="mr-2 "
               aria-label={showLeftPanel ? "Hide sidebar" : "Show sidebar"}
@@ -1921,8 +1921,8 @@ export default function DatabaseQueryApp() {
                             <li
                               key={conversation.id}
                               className={`list-item px-2 py-1 cursor-pointer flex items-center ${
-                                conversation.id === conversationId 
-                                  ? "selected font-medium text-foreground dark:text-foreground" 
+                                conversation.id === conversationId
+                                  ? "selected font-medium text-foreground dark:text-foreground"
                                   : "text-foreground dark:text-foreground"
                               }`}
                             >
@@ -2003,13 +2003,13 @@ export default function DatabaseQueryApp() {
           )}
 
           {/* Resizable container for chat and SQL panels */}
-          <div 
-            id="resizable-container" 
+          <div
+            id="resizable-container"
             className="flex flex-1 h-[calc(100vh-120px)] overflow-hidden"
           >
             {/* Chat panel */}
-            <div 
-              style={{ 
+            <div
+              style={{
                 width: showResultPanel ? `${panelSplit}%` : '100%',
                 minWidth: showResultPanel ? '20%' : '100%',
                 maxWidth: showResultPanel ? '80%' : '100%',
@@ -2173,7 +2173,7 @@ export default function DatabaseQueryApp() {
                               aria-selected={highlightedIndex === idx}
                               className={`list-item px-3 py-2 cursor-pointer text-sm ${
                                 highlightedIndex === idx
-                                  ? 'selected font-medium text-foreground dark:text-foreground pl-3' 
+                                  ? 'selected font-medium text-foreground dark:text-foreground pl-3'
                                   : 'text-foreground dark:text-foreground'
                               }`}
                               onMouseDown={() => {
@@ -2243,8 +2243,8 @@ export default function DatabaseQueryApp() {
               />
             )}
             {showResultPanel && (
-              <div 
-                style={{ 
+              <div
+                style={{
                   width: `${100 - panelSplit}%`,
                   minWidth: '20%',
                   maxWidth: '80%',
@@ -2252,10 +2252,10 @@ export default function DatabaseQueryApp() {
                 }}
                 className="h-full flex-shrink-0"
               >
-                <SqlResultPanel 
-                  results={activeQueryResult?.result} 
+                <SqlResultPanel
+                  results={activeQueryResult?.result}
                   hasError={activeQueryResult?.hasError || false}
-                  onClose={closeResultPanel} 
+                  onClose={closeResultPanel}
                 />
               </div>
             )}
