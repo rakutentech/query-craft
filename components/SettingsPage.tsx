@@ -241,7 +241,44 @@ export default function SettingsPage() {
           databaseConnections: data.databaseConnections
         };
         setSettings(newSettings);
-        localStorage.setItem('settingsCache', JSON.stringify(newSettings));
+        
+        // Cache settings but exclude large schema data to prevent quota exceeded
+        try {
+          const cacheData = {
+            aiSettings: data.settings,
+            databaseConnections: data.databaseConnections.map((conn: DatabaseConnection) => ({
+              ...conn,
+              schema: '' // Exclude schema from cache to save space
+            }))
+          };
+          localStorage.setItem('settingsCache', JSON.stringify(cacheData));
+        } catch (error) {
+          console.warn('Failed to cache settings (likely quota exceeded):', error);
+          // Try to clear old cache and retry with minimal data
+          try {
+            localStorage.removeItem('settingsCache');
+            const minimalCache = {
+              aiSettings: { id: data.settings.id, systemPrompt: data.settings.systemPrompt },
+              databaseConnections: data.databaseConnections.map((conn: DatabaseConnection) => ({
+                id: conn.id,
+                projectName: conn.projectName,
+                dbDriver: conn.dbDriver,
+                dbHost: conn.dbHost,
+                dbPort: conn.dbPort,
+                dbUsername: conn.dbUsername,
+                dbPassword: conn.dbPassword,
+                dbName: conn.dbName,
+                tag: conn.tag,
+                schema: '' // No schema in cache
+              }))
+            };
+            localStorage.setItem('settingsCache', JSON.stringify(minimalCache));
+          } catch (retryError) {
+            console.warn('Failed to cache even minimal settings:', retryError);
+            // Clear all cache if still failing
+            localStorage.removeItem('settingsCache');
+          }
+        }
         setError(null); // Clear error on success
       } else {
         const defaultSettings = await fetchDefaultSettings();
@@ -251,7 +288,21 @@ export default function SettingsPage() {
             databaseConnections: defaultSettings.databaseConnections
           };
           setSettings(newSettings);
-          localStorage.setItem('settingsCache', JSON.stringify(newSettings));
+          
+          // Cache default settings without schemas
+          try {
+            const cacheData = {
+              aiSettings: { id: 1, systemPrompt: DEFAULT_SYSTEM_PROMPT },
+              databaseConnections: defaultSettings.databaseConnections.map((conn: any) => ({
+                ...conn,
+                schema: '' // Exclude schema from cache
+              }))
+            };
+            localStorage.setItem('settingsCache', JSON.stringify(cacheData));
+          } catch (error) {
+            console.warn('Failed to cache default settings:', error);
+            localStorage.removeItem('settingsCache');
+          }
           setError(null); // Clear error on success
         }
       }
@@ -468,7 +519,21 @@ export default function SettingsPage() {
         setTestConnectionResult({});
         setError(null);
         setFormErrors({});
-        localStorage.setItem('settingsCache', JSON.stringify(newSettings));
+        
+        // Cache reset settings without schemas
+        try {
+          const cacheData = {
+            aiSettings: { id: 1, systemPrompt: DEFAULT_SYSTEM_PROMPT },
+            databaseConnections: defaultSettings.databaseConnections.map((conn: any) => ({
+              ...conn,
+              schema: '' // Exclude schema from cache
+            }))
+          };
+          localStorage.setItem('settingsCache', JSON.stringify(cacheData));
+        } catch (error) {
+          console.warn('Failed to cache reset settings:', error);
+          localStorage.removeItem('settingsCache');
+        }
         setShowResetDialog(false);
       }
     } catch (error) {
