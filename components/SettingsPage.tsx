@@ -2,6 +2,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { cacheStorage } from "@/lib/indexeddb";
 import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -144,15 +145,20 @@ export default function SettingsPage() {
 
   useEffect(() => {
     // Try to load cached settings first for instant display
-    const cached = localStorage.getItem('settingsCache');
-    if (cached) {
+    const loadCachedSettings = async () => {
       try {
-        const parsed = JSON.parse(cached);
-        setSettings(parsed);
-        setLoading(false);
-      } catch {}
-    }
-    fetchSettings();
+        const cached = await cacheStorage.getItem('settingsCache', 30); // 30 minute TTL
+        if (cached) {
+          setSettings(cached);
+          setLoading(false);
+        }
+      } catch (error) {
+        console.warn('Failed to load cached settings:', error);
+      }
+      fetchSettings();
+    };
+    
+    loadCachedSettings();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -242,42 +248,11 @@ export default function SettingsPage() {
         };
         setSettings(newSettings);
         
-        // Cache settings but exclude large schema data to prevent quota exceeded
+        // Cache settings with full data including schemas using IndexedDB
         try {
-          const cacheData = {
-            aiSettings: data.settings,
-            databaseConnections: data.databaseConnections.map((conn: DatabaseConnection) => ({
-              ...conn,
-              schema: '' // Exclude schema from cache to save space
-            }))
-          };
-          localStorage.setItem('settingsCache', JSON.stringify(cacheData));
+          await cacheStorage.setItem('settingsCache', newSettings, 30); // 30 minute TTL
         } catch (error) {
-          console.warn('Failed to cache settings (likely quota exceeded):', error);
-          // Try to clear old cache and retry with minimal data
-          try {
-            localStorage.removeItem('settingsCache');
-            const minimalCache = {
-              aiSettings: { id: data.settings.id, systemPrompt: data.settings.systemPrompt },
-              databaseConnections: data.databaseConnections.map((conn: DatabaseConnection) => ({
-                id: conn.id,
-                projectName: conn.projectName,
-                dbDriver: conn.dbDriver,
-                dbHost: conn.dbHost,
-                dbPort: conn.dbPort,
-                dbUsername: conn.dbUsername,
-                dbPassword: conn.dbPassword,
-                dbName: conn.dbName,
-                tag: conn.tag,
-                schema: '' // No schema in cache
-              }))
-            };
-            localStorage.setItem('settingsCache', JSON.stringify(minimalCache));
-          } catch (retryError) {
-            console.warn('Failed to cache even minimal settings:', retryError);
-            // Clear all cache if still failing
-            localStorage.removeItem('settingsCache');
-          }
+          console.warn('Failed to cache settings:', error);
         }
         setError(null); // Clear error on success
       } else {
@@ -289,19 +264,11 @@ export default function SettingsPage() {
           };
           setSettings(newSettings);
           
-          // Cache default settings without schemas
+          // Cache default settings with IndexedDB
           try {
-            const cacheData = {
-              aiSettings: { id: 1, systemPrompt: DEFAULT_SYSTEM_PROMPT },
-              databaseConnections: defaultSettings.databaseConnections.map((conn: any) => ({
-                ...conn,
-                schema: '' // Exclude schema from cache
-              }))
-            };
-            localStorage.setItem('settingsCache', JSON.stringify(cacheData));
+            await cacheStorage.setItem('settingsCache', newSettings, 30); // 30 minute TTL
           } catch (error) {
             console.warn('Failed to cache default settings:', error);
-            localStorage.removeItem('settingsCache');
           }
           setError(null); // Clear error on success
         }
@@ -520,19 +487,11 @@ export default function SettingsPage() {
         setError(null);
         setFormErrors({});
         
-        // Cache reset settings without schemas
+        // Cache reset settings with full data using IndexedDB
         try {
-          const cacheData = {
-            aiSettings: { id: 1, systemPrompt: DEFAULT_SYSTEM_PROMPT },
-            databaseConnections: defaultSettings.databaseConnections.map((conn: any) => ({
-              ...conn,
-              schema: '' // Exclude schema from cache
-            }))
-          };
-          localStorage.setItem('settingsCache', JSON.stringify(cacheData));
+          await cacheStorage.setItem('settingsCache', newSettings, 30); // 30 minute TTL
         } catch (error) {
           console.warn('Failed to cache reset settings:', error);
-          localStorage.removeItem('settingsCache');
         }
         setShowResetDialog(false);
       }

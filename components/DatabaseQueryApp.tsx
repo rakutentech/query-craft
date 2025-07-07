@@ -9,6 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { Spinner } from "@radix-ui/themes";
+import { cacheStorage } from "@/lib/indexeddb";
 import {
   Tooltip,
   TooltipContent,
@@ -139,12 +140,7 @@ export default function DatabaseQueryApp() {
   const [selectedConnectionId, setSelectedConnectionId] = useState<
     number | null
   >(null);
-  const [selectedTag, setSelectedTag] = useState<string | null>(() => {
-    if (typeof window !== 'undefined') {
-      return localStorage.getItem('selectedDatabaseTag') || null;
-    }
-    return null;
-  });
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const [editingSqlId, setEditingSqlId] = useState<{messageId: string, sqlIndex: number} | null>(null);
@@ -179,13 +175,8 @@ export default function DatabaseQueryApp() {
   const [showRecommendations, setShowRecommendations] = useState(false);
   const recommendationsRef = useRef<HTMLDivElement>(null);
 
-  // Chat panel selector state - defaults to TagCloud, with localStorage persistence
-  const [chatPanelMode, setChatPanelMode] = useState<'tagcloud' | 'fieldselector'>(() => {
-    if (typeof window !== 'undefined') {
-      return (localStorage.getItem('chatPanelMode') as 'tagcloud' | 'fieldselector') || 'tagcloud';
-    }
-    return 'tagcloud';
-  });
+  // Chat panel selector state - defaults to TagCloud, with IndexedDB persistence
+  const [chatPanelMode, setChatPanelMode] = useState<'tagcloud' | 'fieldselector'>('tagcloud');
   const [selectedTablesFromTagCloud, setSelectedTablesFromTagCloud] = useState<string[]>([]);
 
   // Embed functionality state
@@ -219,34 +210,27 @@ export default function DatabaseQueryApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadCachedData = () => {
+  const loadCachedData = async () => {
     try {
-      // Load cached database connections with timestamp validation
-      const cachedConnections = localStorage.getItem('dbConnectionsCache');
+      // Load cached database connections with TTL validation
+      const cachedConnections = await cacheStorage.getItem('dbConnectionsCache', 30); // 30 minute TTL
       if (cachedConnections) {
-        const parsed = JSON.parse(cachedConnections);
-        // Handle both old format (array) and new format (object with timestamp)
-        const connections = parsed.connections || parsed;
-        const cacheAge = parsed.timestamp ? Date.now() - parsed.timestamp : 0;
-        
-        // Use cache if less than 30 minutes old
-        if (!parsed.timestamp || cacheAge < 30 * 60 * 1000) {
-          setDatabaseConnections(connections);
-          if (connections.length > 0) {
-            setSelectedConnectionId(connections[0].id);
-          }
-          setAppLoading(false);
+        const connections = cachedConnections.connections || cachedConnections;
+        setDatabaseConnections(connections);
+        if (connections.length > 0) {
+          setSelectedConnectionId(connections[0].id);
         }
+        setAppLoading(false);
       }
 
       // Load cached selected tag
-      const cachedTag = localStorage.getItem('selectedDatabaseTag');
+      const cachedTag = await cacheStorage.getItem('selectedDatabaseTag', 60); // 1 hour TTL
       if (cachedTag) {
         setSelectedTag(cachedTag);
       }
 
       // Load cached chat panel mode preference
-      const cachedMode = localStorage.getItem('chatPanelMode');
+      const cachedMode = await cacheStorage.getItem('chatPanelMode', 1440); // 24 hours TTL
       if (cachedMode && (cachedMode === 'tagcloud' || cachedMode === 'fieldselector')) {
         setChatPanelMode(cachedMode as 'tagcloud' | 'fieldselector');
       }
@@ -298,15 +282,21 @@ export default function DatabaseQueryApp() {
 
   useEffect(() => {
     if (selectedTag) {
-      localStorage.setItem('selectedDatabaseTag', selectedTag);
+      cacheStorage.setItem('selectedDatabaseTag', selectedTag, 60).catch(err => {
+        console.warn('Failed to cache selected tag:', err);
+      });
     } else {
-      localStorage.removeItem('selectedDatabaseTag');
+      cacheStorage.removeItem('selectedDatabaseTag').catch(err => {
+        console.warn('Failed to remove selected tag cache:', err);
+      });
     }
   }, [selectedTag]);
 
   // Persist chat panel mode preference
   useEffect(() => {
-    localStorage.setItem('chatPanelMode', chatPanelMode);
+    cacheStorage.setItem('chatPanelMode', chatPanelMode, 1440).catch(err => {
+      console.warn('Failed to cache chat panel mode:', err);
+    });
   }, [chatPanelMode]);
 
   const scrollToBottom = () => {
@@ -338,12 +328,12 @@ export default function DatabaseQueryApp() {
       const data = await response.json();
       setDatabaseConnections(data.databaseConnections);
       
-      // Cache with timestamp
+      // Cache with IndexedDB
       const cacheData = {
         connections: data.databaseConnections,
         timestamp: Date.now()
       };
-      localStorage.setItem('dbConnectionsCache', JSON.stringify(cacheData));
+      await cacheStorage.setItem('dbConnectionsCache', cacheData, 30); // 30 minute TTL
       
       if (data.databaseConnections.length > 0 && !selectedConnectionId) {
         setSelectedConnectionId(data.databaseConnections[0].id);
@@ -353,33 +343,13 @@ export default function DatabaseQueryApp() {
     }
   };
 
-  // Clean up expired cache entries
-  const cleanupCache = () => {
-    const cacheKeys = [
-      'dbConnectionsCache',
-      'selectedDatabaseTag',
-      'chatPanelMode'
-    ];
-    
-    // Clean up dynamic cache keys
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith('dbTables_') || key.startsWith('conversations_'))) {
-        try {
-          const cached = localStorage.getItem(key);
-          if (cached) {
-            const cachedData = JSON.parse(cached);
-            const cacheAge = Date.now() - cachedData.timestamp;
-            // Remove cache older than 1 hour
-            if (cacheAge > 60 * 60 * 1000) {
-              localStorage.removeItem(key);
-            }
-          }
-        } catch (err) {
-          // Remove invalid cache entries
-          localStorage.removeItem(key);
-        }
-      }
+  // Clean up expired cache entries (IndexedDB handles TTL automatically)
+  const cleanupCache = async () => {
+    try {
+      // IndexedDB implementation handles TTL automatically during getItem calls
+      // No manual cleanup needed as expired items are filtered out when retrieved
+    } catch (err) {
+      console.warn('Error cleaning up cache:', err);
     }
   };
 
@@ -388,16 +358,12 @@ export default function DatabaseQueryApp() {
     
     // Check cache first
     const cacheKey = `dbTables_${selectedConnectionId}`;
-    const cached = localStorage.getItem(cacheKey);
+    const cached = await cacheStorage.getItem(cacheKey, 10); // 10 minute TTL
     if (cached) {
       try {
-        const cachedData = JSON.parse(cached);
-        const cacheAge = Date.now() - cachedData.timestamp;
-        // Cache for 10 minutes
-        if (cacheAge < 10 * 60 * 1000) {
-          setListOfDBTables(cachedData.tables);
-          return;
-        }
+        const tables = cached.tables || cached;
+        setListOfDBTables(tables);
+        return;
       } catch (err) {
         console.error('Error parsing cached tables:', err);
       }
@@ -412,10 +378,10 @@ export default function DatabaseQueryApp() {
       setListOfDBTables(data);
       
       // Cache the tables
-      localStorage.setItem(cacheKey, JSON.stringify({
+      await cacheStorage.setItem(cacheKey, {
         tables: data,
         timestamp: Date.now()
-      }));
+      }, 10); // 10 minute TTL
     } catch (error) {
       console.error("Error fetching database tables:", error);
     }
@@ -428,19 +394,15 @@ export default function DatabaseQueryApp() {
       return;
     }
 
-    // Check localStorage cache
+    // Check IndexedDB cache
     const cacheKey = `conversations_${connectionId}`;
-    const cached = localStorage.getItem(cacheKey);
+    const cached = await cacheStorage.getItem(cacheKey, 5); // 5 minute TTL
     if (cached) {
       try {
-        const cachedData = JSON.parse(cached);
-        const cacheAge = Date.now() - cachedData.timestamp;
-        // Cache conversations for 5 minutes
-        if (cacheAge < 5 * 60 * 1000) {
-          conversationsCache.current.set(connectionId, cachedData.conversations);
-          setCurrentConversation(cachedData.conversations);
-          return;
-        }
+        const conversations = cached.conversations || cached;
+        conversationsCache.current.set(connectionId, conversations);
+        setCurrentConversation(conversations);
+        return;
       } catch (err) {
         console.error('Error parsing cached conversations:', err);
       }
@@ -464,11 +426,11 @@ export default function DatabaseQueryApp() {
       conversationsCache.current.set(connectionId, conversations);
       setCurrentConversation(conversations);
       
-      // Cache to localStorage
-      localStorage.setItem(cacheKey, JSON.stringify({
+      // Cache to IndexedDB
+      await cacheStorage.setItem(cacheKey, {
         conversations,
         timestamp: Date.now()
-      }));
+      }, 5); // 5 minute TTL
     } catch (error) {
       console.error("Error fetching conversations:", error);
     }
@@ -1690,16 +1652,25 @@ export default function DatabaseQueryApp() {
   // Function to handle resizing between chat and SQL panels
   const handlePanelResize = (newPosition: number) => {
     setPanelSplit(newPosition);
-    // Save preference to localStorage for persistence
-    localStorage.setItem('panelSplitPosition', newPosition.toString());
+    // Save preference to IndexedDB for persistence
+    cacheStorage.setItem('panelSplitPosition', newPosition, 1440).catch(err => {
+      console.warn('Failed to save panel split position:', err);
+    });
   };
 
   // Load saved panel split preference on mount
   useEffect(() => {
-    const savedSplit = localStorage.getItem('panelSplitPosition');
-    if (savedSplit) {
-      setPanelSplit(parseFloat(savedSplit));
-    }
+    const loadPanelSplit = async () => {
+      try {
+        const savedSplit = await cacheStorage.getItem('panelSplitPosition', 1440); // 24 hours TTL
+        if (savedSplit) {
+          setPanelSplit(parseFloat(savedSplit.toString()));
+        }
+      } catch (err) {
+        console.warn('Failed to load panel split position:', err);
+      }
+    };
+    loadPanelSplit();
   }, []);
 
   // Fetch recommendations on input focus or when input changes
