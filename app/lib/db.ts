@@ -1491,14 +1491,35 @@ export async function updateSharedMessage(token: string, content: string): Promi
 
 export async function saveDatabaseConnection(connection: DatabaseConnection, userId: string): Promise<number> {
   const db = await getDb();
-  const now = databaseConfig.type === 'mysql' 
+  const now = databaseConfig.type === 'mysql'
     ? new Date().toISOString().slice(0, 19).replace('T', ' ')
     : new Date().toISOString();
 
-  if (connection.id) {
-    // Connection exists, update it
-    await updateDatabaseConnection(connection, userId);
-    return connection.id;
+  // Check if connection already exists based on host + database name identifier
+  let existingConnection: DatabaseConnection | null = null;
+  
+  if (databaseConfig.type === 'mysql') {
+    const [rows] = await (db as mysql.Pool).execute(
+      'SELECT * FROM database_connections WHERE user_id = ? AND dbHost = ? AND dbName = ? LIMIT 1',
+      [userId, connection.dbHost, connection.dbName]
+    );
+    const arr = rows as any[];
+    if (arr && arr.length > 0) {
+      existingConnection = arr[0] as DatabaseConnection;
+    }
+  } else {
+    const result = await (db as SQLiteDatabase).get<DatabaseConnection>(
+      'SELECT * FROM database_connections WHERE user_id = ? AND dbHost = ? AND dbName = ? LIMIT 1',
+      [userId, connection.dbHost, connection.dbName]
+    );
+    existingConnection = result || null;
+  }
+
+  if (existingConnection) {
+    // Connection exists based on host + database name, update it
+    const connectionToUpdate = { ...connection, id: existingConnection.id };
+    await updateDatabaseConnection(connectionToUpdate, userId);
+    return existingConnection.id;
   } else {
     // New connection, insert it
     const params = [
